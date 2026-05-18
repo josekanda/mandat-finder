@@ -129,3 +129,76 @@ if __name__ == "__main__":
     parser.add_argument("--zone", required=True, help="code postal (ex: 69100)")
     args = parser.parse_args()
     ingest(args.zone)
+    import pandera.pandas as pa
+from pandera.pandas import Column, DataFrameSchema, Check
+
+PROSPECT_SCHEMA = DataFrameSchema(
+    {
+        "code_postal": Column(str, nullable=False),
+        "adresse": Column(str, nullable=False),
+        "dpe": Column(str, nullable=True),
+        "annee_construction": Column(float, nullable=True),
+        "annees_detention": Column(float, nullable=True),
+        "plus_value_pct": Column(float, nullable=True),
+        "is_sci_familiale": Column(object, nullable=True),
+        "usage_local": Column(str, nullable=True),
+        "score": Column(float, nullable=True),
+    },
+    coerce=True,
+    strict=False,
+)
+def normalize_text(s):
+    return (
+        s.astype(str)
+        .str.upper()
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+    )
+
+
+def flag_duplicate_addresses(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["adresse_norm"] = normalize_text(df["adresse"])
+    df["is_duplicate_address"] = df.duplicated(
+        subset=["code_postal", "adresse_norm"], keep=False
+    )
+    return df
+
+
+def check_dpe_construction_consistency(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["dpe_year_inconsistent"] = False
+
+    if "dpe" in df.columns and "annee_construction" in df.columns:
+        recent_building = df["annee_construction"].fillna(0) >= 2015
+        bad_dpe_for_recent = df["dpe"].astype(str).isin(["F", "G"])
+        df.loc[recent_building & bad_dpe_for_recent, "dpe_year_inconsistent"] = True
+
+    return df
+
+
+def exclude_commercial_parcels(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    if "usage_local" in df.columns:
+        residential_values = ["RESIDENTIEL", "HABITATION", "APPARTEMENT", "MAISON"]
+        df["usage_local"] = df["usage_local"].astype(str).str.upper().str.strip()
+        df = df[df["usage_local"].isin(residential_values)]
+
+    return df
+
+
+def validate_with_pandera(df: pd.DataFrame) -> pd.DataFrame:
+    return PROSPECT_SCHEMA.validate(df)
+
+def ingest(code_postal: str):
+    df = join_all(code_postal)
+    df["score"] = df.apply(score_row, axis=1)
+
+    df = flag_duplicate_addresses(df)
+    df = check_dpe_construction_consistency(df)
+    df = exclude_commercial_parcels(df)
+    df = validate_with_pandera(df)
+
+    records = df.to_dict(orient="records")
+    SUPA.table("prospects_raw").insert(records).execute()
