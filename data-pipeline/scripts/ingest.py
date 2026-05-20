@@ -1,9 +1,14 @@
 # data-pipeline/scripts/ingest.py
 import os
+import json
 from pathlib import Path
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 FIXTURES_DIR = BASE_DIR / "fixtures"
+
 import pandas as pd
+import pandera.pandas as pa
+from pandera.pandas import Column, DataFrameSchema
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -13,6 +18,25 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 
 SUPA = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+PROSPECT_SCHEMA = DataFrameSchema(
+    {
+        "code_postal": Column(str, nullable=False),
+        "adresse": Column(str, nullable=False),
+        "etiquette_dpe": Column(str, nullable=True),
+        "annees_detention": Column(float, nullable=True),
+        "plus_value_pct": Column(float, nullable=True),
+        "is_sci_familiale": Column(object, nullable=True),
+        "score": Column(float, nullable=True),
+    },
+    coerce=True,
+    strict=False,
+)
+
+PROSPECTS_COLS = [
+    "code_postal", "adresse", "etiquette_dpe",
+    "annees_detention", "plus_value_pct", "is_sci_familiale", "score",
+]
 
 
 def fetch_dpe(code_postal: str) -> pd.DataFrame:
@@ -35,7 +59,7 @@ def fetch_dpe(code_postal: str) -> pd.DataFrame:
             if skip >= min(body.get("total", 0), max_records):
                 break
     df = pd.DataFrame(rows)
-    return df.rename(columns={"code_postal_ban": "code_postal", "adresse_brut": "adresse_brute"})
+    return df.rename(columns={"code_postal_ban": "code_postal", "adresse_brut": "adresse"})
 
 
 def fetch_cadastre(code_postal: str) -> pd.DataFrame:
@@ -57,18 +81,10 @@ def normalize_and_join(dpe, cad, dvf, sci) -> pd.DataFrame:
     df = dpe.copy()
 
     if "adresse" not in df.columns:
-        if "adresse_brute" in df.columns:
-            df["adresse"] = df["adresse_brute"]
-        elif "adresse_brut" in df.columns:
-            df["adresse"] = df["adresse_brut"]
-        else:
-            df["adresse"] = None
+        df["adresse"] = None
 
     if "code_postal" not in df.columns:
-        if "postcode" in df.columns:
-            df["code_postal"] = df["postcode"]
-        else:
-            df["code_postal"] = None
+        df["code_postal"] = df.get("postcode", None)
 
     df["adresse"] = df["adresse"].astype(str).str.upper().str.strip()
     cad["adresse"] = cad["adresse"].astype(str).str.upper().str.strip()
@@ -97,7 +113,7 @@ def join_all(code_postal: str) -> pd.DataFrame:
 
 def score_row(row) -> int:
     s = 0
-    if row.get("dpe") in ("F", "G"):
+    if row.get("etiquette_dpe") in ("F", "G"):
         s += 40
     if (row.get("annees_detention") or 0) > 15:
         s += 25
@@ -108,45 +124,6 @@ def score_row(row) -> int:
     return min(s, 100)
 
 
-PROSPECTS_COLS = ["code_postal", "adresse", "dpe", "annees_detention", "plus_value_pct", "is_sci_familiale", "score"]
-
-
-def ingest(code_postal: str):
-    df = join_all(code_postal)
-    if "etiquette_dpe" in df.columns:
-        df = df.rename(columns={"etiquette_dpe": "dpe"})
-    df["score"] = df.apply(score_row, axis=1)
-    import json
-    cols = [c for c in PROSPECTS_COLS if c in df.columns]
-    records = json.loads(df[cols].to_json(orient="records"))
-    SUPA.table("prospects_raw").insert(records).execute()
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--zone", required=True, help="code postal (ex: 69100)")
-    args = parser.parse_args()
-    ingest(args.zone)
-    import pandera.pandas as pa
-from pandera.pandas import Column, DataFrameSchema, Check
-
-PROSPECT_SCHEMA = DataFrameSchema(
-    {
-        "code_postal": Column(str, nullable=False),
-        "adresse": Column(str, nullable=False),
-        "dpe": Column(str, nullable=True),
-        "annee_construction": Column(float, nullable=True),
-        "annees_detention": Column(float, nullable=True),
-        "plus_value_pct": Column(float, nullable=True),
-        "is_sci_familiale": Column(object, nullable=True),
-        "usage_local": Column(str, nullable=True),
-        "score": Column(float, nullable=True),
-    },
-    coerce=True,
-    strict=False,
-)
 def normalize_text(s):
     return (
         s.astype(str)
@@ -169,9 +146,9 @@ def check_dpe_construction_consistency(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["dpe_year_inconsistent"] = False
 
-    if "dpe" in df.columns and "annee_construction" in df.columns:
+    if "etiquette_dpe" in df.columns and "annee_construction" in df.columns:
         recent_building = df["annee_construction"].fillna(0) >= 2015
-        bad_dpe_for_recent = df["dpe"].astype(str).isin(["F", "G"])
+        bad_dpe_for_recent = df["etiquette_dpe"].astype(str).isin(["F", "G"])
         df.loc[recent_building & bad_dpe_for_recent, "dpe_year_inconsistent"] = True
 
     return df
@@ -188,9 +165,6 @@ def exclude_commercial_parcels(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def validate_with_pandera(df: pd.DataFrame) -> pd.DataFrame:
-    return PROSPECT_SCHEMA.validate(df)
-
 def ingest(code_postal: str):
     df = join_all(code_postal)
     df["score"] = df.apply(score_row, axis=1)
@@ -198,7 +172,18 @@ def ingest(code_postal: str):
     df = flag_duplicate_addresses(df)
     df = check_dpe_construction_consistency(df)
     df = exclude_commercial_parcels(df)
-    df = validate_with_pandera(df)
+    df = PROSPECT_SCHEMA.validate(df)
 
-    records = df.to_dict(orient="records")
-    SUPA.table("prospects_raw").insert(records).execute()
+    cols = [c for c in PROSPECTS_COLS if c in df.columns]
+    records = json.loads(df[cols].to_json(orient="records"))
+    SUPA.table("prospects").insert(records).execute()
+    print(f"Inserted {len(records)} prospects for zone {code_postal}")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zone", required=True, help="code postal (ex: 69100)")
+    args = parser.parse_args()
+    ingest(args.zone)
