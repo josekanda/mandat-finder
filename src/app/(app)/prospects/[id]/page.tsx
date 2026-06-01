@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import ProspectStatusSelect from "@/components/prospect-status-select";
 
 type ProspectDetail = {
@@ -9,7 +9,10 @@ type ProspectDetail = {
   adresse: string | null;
   code_postal: string | null;
   score: number | null;
-  etiquette_dpe: string | null;
+  annee_construction: number | null;
+  evaluation_municipale: number | null;
+  type_immeuble: string | null;
+  nb_logements: number | null;
   statut: string | null;
   notes: string | null;
   source: string | null;
@@ -83,25 +86,26 @@ async function updateProspectNotes(formData: FormData) {
 
 export default async function ProspectDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data, error } = await supabase
     .from("prospects")
-    .select(
-      `
-        id,
-        adresse,
-        code_postal,
-        score,
-        etiquette_dpe,
-        statut,
-        notes,
-        source,
-        type_bien,
-        latitude,
-        longitude
-      `
-    )
+    .select(`
+  id,
+  adresse,
+  code_postal,
+  score,
+  annee_construction,
+  evaluation_municipale,
+  type_immeuble,
+  nb_logements,
+  statut,
+  notes,
+  source,
+  type_bien,
+  latitude,
+  longitude
+`)
     .eq("id", id)
     .single();
 
@@ -157,7 +161,7 @@ export default async function ProspectDetailPage({ params }: PageProps) {
         </span>
 
         <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">
-          DPE {prospect.etiquette_dpe ?? "—"}
+          Construit en {prospect.annee_construction ?? "—"}
         </span>
       </div>
 
@@ -185,9 +189,26 @@ export default async function ProspectDetailPage({ params }: PageProps) {
               </div>
 
               <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">DPE</p>
+                <p className="text-sm text-neutral-500">Année de construction</p>
                 <p className="mt-2 text-2xl font-semibold text-neutral-950">
-                  {prospect.etiquette_dpe ?? "—"}
+                  {prospect.annee_construction ?? "—"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Évaluation municipale</p>
+                <p className="mt-2 text-xl font-semibold text-neutral-950">
+                  {prospect.evaluation_municipale
+                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(prospect.evaluation_municipale)
+                    : "—"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Type d'immeuble</p>
+                <p className="mt-2 text-xl font-semibold text-neutral-950">
+                  {prospect.type_immeuble ?? "—"}
+                  {prospect.nb_logements ? ` · ${prospect.nb_logements} log.` : ""}
                 </p>
               </div>
 
