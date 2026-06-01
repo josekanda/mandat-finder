@@ -4,17 +4,13 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ProspectListItem } from "@/app/(app)/prospects/page";
 
-type SortKey = "adresse" | "code_postal" | "score" | "etiquette_dpe" | "statut";
+type SortKey = "adresse" | "code_postal" | "score" | "annee_construction" | "statut";
 type SortDirection = "asc" | "desc";
 
 function compareValues(a: string | number | null, b: string | number | null) {
   if (a === null) return 1;
   if (b === null) return -1;
-
-  if (typeof a === "number" && typeof b === "number") {
-    return a - b;
-  }
-
+  if (typeof a === "number" && typeof b === "number") return a - b;
   return String(a).localeCompare(String(b), "fr", { sensitivity: "base" });
 }
 
@@ -25,9 +21,9 @@ function scoreBadgeClass(score: number | null) {
 }
 
 function exportCsv(prospects: ProspectListItem[]) {
-  const headers = ["id", "adresse", "code_postal", "score", "etiquette_dpe", "statut"];
+  const headers = ["id", "adresse", "code_postal", "score", "annee_construction", "statut"];
   const rows = prospects.map((p) =>
-    [p.id, p.adresse ?? "", p.code_postal ?? "", p.score ?? "", p.etiquette_dpe ?? "", p.statut ?? ""]
+    [p.id, p.adresse ?? "", p.code_postal ?? "", p.score ?? "", p.annee_construction ?? "", p.statut ?? ""]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );
@@ -43,30 +39,31 @@ function exportCsv(prospects: ProspectListItem[]) {
 
 export default function ProspectsTable({
   prospects,
+  hoveredId = null,
+  onHover,
 }: {
   prospects: ProspectListItem[];
+  hoveredId?: string | null;
+  onHover?: (id: string | null) => void;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
       return;
     }
-
     setSortKey(nextKey);
     setSortDirection(nextKey === "score" ? "desc" : "asc");
   }
 
   const sortedProspects = useMemo(() => {
     const copy = [...prospects];
-
     copy.sort((a, b) => {
       const result = compareValues(a[sortKey], b[sortKey]);
       return sortDirection === "asc" ? result : -result;
     });
-
     return copy;
   }, [prospects, sortDirection, sortKey]);
 
@@ -74,7 +71,7 @@ export default function ProspectsTable({
     { key: "adresse", label: "Adresse" },
     { key: "code_postal", label: "CP" },
     { key: "score", label: "Score" },
-    { key: "etiquette_dpe", label: "DPE" },
+    { key: "annee_construction", label: "Construit en" },
     { key: "statut", label: "Pipeline" },
   ];
 
@@ -84,7 +81,7 @@ export default function ProspectsTable({
         <div>
           <h2 className="text-base font-semibold text-neutral-950">Liste triable</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Clique sur un en-tête pour changer le tri.
+            Survole une ligne pour centrer la carte.
           </p>
         </div>
         <button
@@ -125,40 +122,44 @@ export default function ProspectsTable({
                 </td>
               </tr>
             ) : (
-              sortedProspects.map((prospect) => (
-                <tr key={prospect.id} className="border-t border-neutral-100">
-                  <td className="px-5 py-4">
-                    <Link
-                      href={`/prospects/${prospect.id}`}
-                      className="font-medium text-neutral-900 hover:underline"
-                    >
-                      {prospect.adresse ?? "Adresse inconnue"}
-                    </Link>
-                  </td>
+              sortedProspects.map((prospect) => {
+                const isHovered = hoveredId === prospect.id;
+                const hasCoords =
+                  typeof prospect.latitude === "number" &&
+                  typeof prospect.longitude === "number";
 
-                  <td className="px-5 py-4 text-neutral-600">
-                    {prospect.code_postal ?? "—"}
-                  </td>
-
-                  <td className="px-5 py-4">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${scoreBadgeClass(
-                        prospect.score
-                      )}`}
-                    >
-                      {prospect.score ?? "—"}
-                    </span>
-                  </td>
-
-                  <td className="px-5 py-4 text-neutral-600">
-                    {prospect.etiquette_dpe ?? "—"}
-                  </td>
-
-                  <td className="px-5 py-4 text-neutral-600">
-                    {prospect.statut ?? "découvert"}
-                  </td>
-                </tr>
-              ))
+                return (
+                  <tr
+                    key={prospect.id}
+                    className={`border-t border-neutral-100 transition-colors ${
+                      isHovered ? "bg-blue-50" : hasCoords ? "cursor-pointer hover:bg-neutral-50" : ""
+                    }`}
+                    onMouseEnter={() => hasCoords && onHover?.(prospect.id)}
+                    onMouseLeave={() => onHover?.(null)}
+                  >
+                    <td className="px-5 py-4">
+                      <Link
+                        href={`/prospects/${prospect.id}`}
+                        className="font-medium text-neutral-900 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {prospect.adresse ?? "Adresse inconnue"}
+                      </Link>
+                      {!hasCoords && (
+                        <span className="ml-2 text-xs text-neutral-400">sans GPS</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-neutral-600">{prospect.code_postal ?? "—"}</td>
+                    <td className="px-5 py-4">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${scoreBadgeClass(prospect.score)}`}>
+                        {prospect.score ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-neutral-600">{prospect.annee_construction ?? "—"}</td>
+                    <td className="px-5 py-4 text-neutral-600">{prospect.statut ?? "découvert"}</td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
