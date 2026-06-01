@@ -47,34 +47,58 @@ PROSPECTS_COLS = [
 def fetch_evaluation_fonciere(code_postal: str) -> pd.DataFrame:
     """
     Source : Données Québec — Rôle d'évaluation foncière municipale (MAMH).
-    URL CKAN à vérifier sur https://www.donneesquebec.ca avant mise en prod.
-    Le resource_id ci-dessous est un exemple — remplace-le par l'ID réel du jeu de données.
+    https://www.donneesquebec.ca/recherche/dataset/roles-d-evaluation-fonciere-du-quebec
+
+    ARCHITECTURE RÉELLE (à implémenter en prod) :
+    Les données ne sont PAS dans le datastore CKAN requêtable par code postal.
+    Elles sont distribuées en archives ZIP par municipalité.
+
+    Intégration complète requiert :
+      1. Télécharger l'index CSV 2026 (resource_id: c0e65c47-fcc1-40e4-bc2e-7baa74bc164a)
+         via https://www.donneesquebec.ca/api/3/action/datastore_search
+         pour trouver l'URL du ZIP de la bonne municipalité (via code_postal → NOM_MUNICIPALITE)
+      2. Télécharger le ZIP de la municipalité
+      3. Extraire et parser les fichiers XML/CSV qu'il contient
+      4. Filtrer par CODE_POSTAL localement
+
+    Alternative : CSV géoréférencé 2024 complet (tout le Québec, ~1 Go) :
+      resource_id: fe31dfcd-0753-4769-9868-d897d9c5a0ba
+      À télécharger une fois et indexer localement (DuckDB, SQLite, etc.)
+
+    En attendant cette intégration, la fonction retourne un DataFrame vide et
+    normalize_and_join utilise exclusivement les données du cadastre_mock.csv.
     """
     import httpx
-    # TODO: vérifier resource_id sur donneesquebec.ca au moment du déploiement
+    # Le datastore CKAN retourne 404 pour les ressources de propriétés individuelles —
+    # elles sont disponibles en téléchargement fichier uniquement (voir docstring ci-dessus).
     url = "https://www.donneesquebec.ca/api/3/action/datastore_search"
-    resource_id = "REMPLACER_PAR_RESOURCE_ID_MAMH"
+    resource_id = "fe31dfcd-0753-4769-9868-d897d9c5a0ba"  # géoréférencé 2024
     rows = []
     offset = 0
     limit = 1000
     max_records = 10000
-    with httpx.Client(timeout=30) as client:
-        while len(rows) < max_records:
-            resp = client.get(url, params={
-                "resource_id": resource_id,
-                "limit": limit,
-                "offset": offset,
-                "filters": json.dumps({"CODE_POSTAL": code_postal}),
-            })
-            resp.raise_for_status()
-            body = resp.json()
-            batch = body.get("result", {}).get("records", [])
-            if not batch:
-                break
-            rows.extend(batch)
-            offset += limit
-            if offset >= min(body.get("result", {}).get("total", 0), max_records):
-                break
+    try:
+        with httpx.Client(timeout=30) as client:
+            while len(rows) < max_records:
+                resp = client.get(url, params={
+                    "resource_id": resource_id,
+                    "limit": limit,
+                    "offset": offset,
+                    "filters": json.dumps({"CODE_POSTAL": code_postal}),
+                })
+                if resp.status_code == 404:
+                    break
+                resp.raise_for_status()
+                body = resp.json()
+                batch = body.get("result", {}).get("records", [])
+                if not batch:
+                    break
+                rows.extend(batch)
+                offset += limit
+                if offset >= min(body.get("result", {}).get("total", 0), max_records):
+                    break
+    except httpx.HTTPError:
+        pass
     df = pd.DataFrame(rows)
     if df.empty:
         return df
