@@ -1,9 +1,13 @@
 -- Migration 0003: adaptation schéma Québec
 
 -- Renommer les colonnes France en colonnes Québec
--- Note: etiquette_dpe (text) is renamed to annee_construction
--- The actual type conversion happens in the data pipeline during import
 alter table prospects rename column etiquette_dpe to annee_construction;
+
+-- Clear invalid data (old DPE ratings A-G) before type conversion
+update prospects set annee_construction = null where annee_construction !~ '^\d+$';
+
+-- Convert annee_construction to integer
+alter table prospects alter column annee_construction type integer using annee_construction::integer;
 
 alter table prospects rename column is_sci_familiale to is_societe;
 
