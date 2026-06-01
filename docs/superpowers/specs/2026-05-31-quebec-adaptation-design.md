@@ -23,11 +23,13 @@ Mandat Finder est une plateforme de prospection immobilière SaaS pour les agenc
 | DVF mock (transactions) | Transactions mock (style Québec) | Mock → remplaçable |
 | RNE mock → `fetch_rne()` | REQ — Registre des entreprises du Québec | Vraie API |
 
-### Rôle d'évaluation foncière de Montréal
+### Rôle d'évaluation foncière — toutes municipalités du Québec (MAMH)
 
-- **URL :** `https://donnees.montreal.ca/api/3/action/datastore_search` (CKAN open data)
-- **Champs utilisés :** `ANNEE_CONSTRUCTION`, `CATEGORIE_UTILISATION`, `NOMBRE_LOGEMENTS`, `VALEUR_EVALUATION`, `ADRESSE`, `CODE_POSTAL`
-- Paramètre d'entrée : `CODE_POSTAL` (format canadien `A1A 1A1`)
+- **Source :** Données Québec — Rôle d'évaluation foncière municipale, publié par le Ministère des Affaires municipales et de l'Habitation (MAMH)
+- **URL :** `https://www.donneesquebec.ca/recherche/dataset/roles-d-evaluation-fonciere-municipaux` (à vérifier au moment de l'implémentation — format CSV ou API CKAN selon millésime)
+- **Champs utilisés :** `ANNEE_CONSTRUCTION`, `CATEGORIE_UTILISATION`, `NOMBRE_LOGEMENTS`, `VALEUR_EVALUATION`, `ADRESSE`, `CODE_POSTAL`, `NOM_MUNICIPALITE`
+- **Paramètre d'entrée :** `CODE_POSTAL` (format canadien `A1A 1A1`) — filtre appliqué localement après téléchargement ou via paramètre de requête
+- **Portée :** toutes les municipalités du Québec (Montréal, Laval, Québec, Longueuil, Sherbrooke, etc.)
 - Remplace `fetch_dpe()` — renommé `fetch_evaluation_fonciere()`
 
 ### REQ — Registre des entreprises du Québec
