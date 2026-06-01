@@ -181,7 +181,7 @@ export default function HomePage() {
                 Priorise les bons biens au lieu d’explorer des lignes sans contexte.
               </h3>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-neutral-600">
-                Les signaux sont regroupés dans une vue lisible : score, DPE, zone, historique et statut pipeline.
+                Les signaux sont regroupés dans une vue lisible : score, année de construction, zone, historique et statut pipeline.
               </p>
             </div>
           </Reveal>

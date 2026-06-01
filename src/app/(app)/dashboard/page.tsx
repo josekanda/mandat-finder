@@ -182,7 +182,7 @@ export default async function DashboardPage() {
             <div className="rounded-xl bg-neutral-50 p-4">
               <p className="font-medium text-neutral-900">Priorité du jour</p>
               <p className="mt-1">
-                Commencer par les scores élevés et les DPE F/G permet de concentrer l’effort commercial sur les cas à potentiel.
+                Commencer par les scores élevés et les bâtiments pré-1960 permet de concentrer l’effort commercial sur les cas à potentiel.
               </p>
             </div>
 
