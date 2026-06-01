@@ -1,9 +1,10 @@
 // src/app/(app)/dashboard/page.tsx
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import DashboardCharts from "@/components/dashboard-charts";
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("fr-FR").format(value);
+  return new Intl.NumberFormat("fr-CA").format(value);
 }
 
 type ProspectRow = {
@@ -11,18 +12,23 @@ type ProspectRow = {
   adresse: string | null;
   code_postal: string | null;
   score: number | null;
-  etiquette_dpe: string | null;
+  annee_construction: number | null;
   statut: string | null;
 };
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: prospects, error } = await supabase
     .from("prospects")
-    .select("id, adresse, code_postal, score, etiquette_dpe, statut")
+    .select("id, adresse, code_postal, score, annee_construction, statut")
     .order("score", { ascending: false })
     .limit(12);
+
+  const { data: chartData } = await supabase
+    .from("prospects")
+    .select("annee_construction, statut, score")
+    .limit(500);
 
   if (error) {
     return (
@@ -40,7 +46,7 @@ export default async function DashboardPage() {
 
   const totalProspects = rows.length;
   const hotProspects = rows.filter((row) => (row.score ?? 0) >= 80).length;
-  const dpeFG = rows.filter((row) => ["F", "G"].includes((row.etiquette_dpe ?? "").toUpperCase())).length;
+  const pre1960 = rows.filter((row) => (row.annee_construction ?? Infinity) <= 1960).length;
   const contacted = rows.filter((row) =>
     ["contacté", "rdv", "mandat signé"].includes((row.statut ?? "").toLowerCase())
   ).length;
@@ -61,7 +67,7 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-neutral-500">Prospects visibles</p>
+          <p className="text-sm text-neutral-500">Propriétés visibles</p>
           <p className="mt-3 text-3xl font-semibold text-neutral-950">
             {formatNumber(totalProspects)}
           </p>
@@ -81,9 +87,9 @@ export default async function DashboardPage() {
         </div>
 
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-neutral-500">DPE F / G</p>
+          <p className="text-sm text-neutral-500">Bâtiments pré-1960</p>
           <p className="mt-3 text-3xl font-semibold text-neutral-950">
-            {formatNumber(dpeFG)}
+            {formatNumber(pre1960)}
           </p>
           <p className="mt-2 text-xs text-neutral-500">
             Opportunités de rénovation à prioriser
@@ -126,7 +132,7 @@ export default async function DashboardPage() {
                   <th className="px-5 py-3 font-medium">Adresse</th>
                   <th className="px-5 py-3 font-medium">Code postal</th>
                   <th className="px-5 py-3 font-medium">Score</th>
-                  <th className="px-5 py-3 font-medium">DPE</th>
+                  <th className="px-5 py-3 font-medium">Construit en</th>
                   <th className="px-5 py-3 font-medium">Pipeline</th>
                 </tr>
               </thead>
@@ -157,7 +163,7 @@ export default async function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-neutral-600">
-                        {prospect.etiquette_dpe ?? "—"}
+                        {prospect.annee_construction ?? "—"}
                       </td>
                       <td className="px-5 py-4 text-neutral-600">
                         {prospect.statut ?? "découvert"}
@@ -195,6 +201,10 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section>
+        <DashboardCharts prospects={chartData ?? []} />
       </section>
     </div>
   );
