@@ -30,7 +30,7 @@ export default function LoginPage() {
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
               <p className="text-sm font-medium text-neutral-900">Exemple d’usage</p>
               <p className="mt-2 text-sm text-neutral-600">
-                Une agence cible Villeurbanne, identifie les biens énergivores, priorise les scores élevés,
+                Une agence cible Montréal ou Québec, identifie les propriétés à fort potentiel, priorise les scores élevés,
                 puis suit les contacts jusqu’au mandat signé.
               </p>
             </div>

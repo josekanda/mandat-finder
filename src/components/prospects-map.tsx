@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import Link from "next/link";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ProspectListItem } from "@/app/(app)/prospects/page";
@@ -14,22 +13,24 @@ function getMarkerColor(score: number | null) {
 
 export default function ProspectsMap({
   prospects,
+  hoveredId = null,
 }: {
   prospects: ProspectListItem[];
+  hoveredId?: string | null;
 }) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
   const points = useMemo(
     () =>
       prospects.filter(
-        (prospect) =>
-          typeof prospect.latitude === "number" &&
-          typeof prospect.longitude === "number"
+        (p) => typeof p.latitude === "number" && typeof p.longitude === "number"
       ),
     [prospects]
   );
 
+  // Initialise la carte et les marqueurs
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
@@ -58,7 +59,7 @@ export default function ProspectsMap({
             CP: ${prospect.code_postal ?? "—"}
           </div>
           <div style="font-size:12px;color:#4b5563;margin-bottom:4px;">
-            Score: ${prospect.score ?? "—"} · DPE: ${prospect.etiquette_dpe ?? "—"}
+            Score: ${prospect.score ?? "—"} · Construit en: ${prospect.annee_construction ?? "—"}
           </div>
           <div style="font-size:12px;color:#4b5563;">
             Pipeline: ${prospect.statut ?? "découvert"}
@@ -66,45 +67,72 @@ export default function ProspectsMap({
         </div>
       `;
 
-      new maplibregl.Marker({ color: getMarkerColor(prospect.score) })
+      const popup = new maplibregl.Popup({ offset: 24, closeButton: false }).setHTML(popupHtml);
+
+      const marker = new maplibregl.Marker({ color: getMarkerColor(prospect.score) })
         .setLngLat([prospect.longitude as number, prospect.latitude as number])
-        .setPopup(new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml))
+        .setPopup(popup)
         .addTo(map);
+
+      markersRef.current.set(prospect.id, marker);
     });
 
     if (points.length > 1) {
       const bounds = new maplibregl.LngLatBounds();
-
-      points.forEach((prospect) => {
-        bounds.extend([prospect.longitude as number, prospect.latitude as number]);
-      });
-
-      map.fitBounds(bounds, {
-        padding: 50,
-        maxZoom: 14,
-      });
+      points.forEach((p) => bounds.extend([p.longitude as number, p.latitude as number]));
+      map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
     }
 
     return () => {
+      markersRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
   }, [points]);
+
+  // Synchronise la carte avec la ligne survolée
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Ferme tous les popups ouverts
+    markersRef.current.forEach((marker) => {
+      if (marker.getPopup().isOpen()) marker.togglePopup();
+    });
+
+    if (!hoveredId) return;
+
+    const prospect = points.find((p) => p.id === hoveredId);
+    const marker = markersRef.current.get(hoveredId);
+    if (!prospect || !marker) return;
+
+    map.flyTo({
+      center: [prospect.longitude as number, prospect.latitude as number],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 700,
+      essential: true,
+    });
+
+    // Ouvre le popup après le vol
+    const timer = setTimeout(() => {
+      if (!marker.getPopup().isOpen()) marker.togglePopup();
+    }, 750);
+
+    return () => clearTimeout(timer);
+  }, [hoveredId, points]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
       <div className="border-b border-neutral-200 px-5 py-4">
         <h2 className="text-base font-semibold text-neutral-950">Carte</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Les pins changent de couleur selon le score.
+          Survole une ligne du tableau pour centrer et ouvrir le détail.
         </p>
       </div>
 
       {points.length === 0 ? (
         <div className="flex h-[540px] items-center justify-center px-6 text-center text-sm text-neutral-500">
-          Aucun prospect géolocalisé pour le moment. Ajoute des coordonnées latitude / longitude
-          dans la table <code className="mx-1 rounded bg-neutral-100 px-1.5 py-0.5">prospects</code>
-          pour afficher la carte.
+          Aucun prospect géolocalisé pour le moment.
         </div>
       ) : (
         <div className="relative">

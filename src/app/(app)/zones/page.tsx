@@ -150,10 +150,10 @@ export default async function ZonesPage() {
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-neutral-950">Exemple simple</h2>
             <div className="mt-4 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
-              <p className="font-medium text-neutral-900">Villeurbanne 69100</p>
+              <p className="font-medium text-neutral-900">Montréal (Rosemont) H2S</p>
               <p className="mt-1">
                 Zone active, rayon 3 à 5 km, idéale pour tester rapidement l’acquisition ciblée et
-                la remontée des signaux faibles.
+                la remontée des signaux faibles (année de construction, ratio évaluation/marché).
               </p>
             </div>
           </div>
