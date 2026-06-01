@@ -14,10 +14,10 @@ from supabase import create_client
 
 load_dotenv(BASE_DIR.parents[0] / ".env")
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-
-SUPA = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+def _get_supa():
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_KEY"]
+    return create_client(url, key)
 
 PROSPECT_SCHEMA = DataFrameSchema(
     {
@@ -121,7 +121,12 @@ def normalize_text(s: pd.Series) -> pd.Series:
 
 
 def normalize_and_join(mamh: pd.DataFrame, cad: pd.DataFrame, trans: pd.DataFrame, req: pd.DataFrame) -> pd.DataFrame:
+    if mamh.empty:
+        return mamh
     df = mamh.copy()
+    cad = cad.copy()
+    trans = trans.copy()
+    req = req.copy()
 
     if "adresse" not in df.columns:
         df["adresse"] = None
@@ -192,13 +197,14 @@ def exclude_non_residential(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_agence_id() -> str:
-    result = SUPA.table("agences").select("id").limit(1).execute()
+    result = _get_supa().table("agences").select("id").limit(1).execute()
     if not result.data:
         raise RuntimeError("Aucune agence trouvée dans la base. Crée-en une d'abord.")
     return result.data[0]["id"]
 
 
 def ingest(code_postal: str):
+    supa = _get_supa()
     agence_id = get_agence_id()
     df = join_all(code_postal)
     df["agence_id"] = agence_id
@@ -213,8 +219,8 @@ def ingest(code_postal: str):
     cols = [c for c in PROSPECTS_COLS if c in df.columns]
     records = json.loads(df[cols].to_json(orient="records"))
 
-    SUPA.table("prospects").delete().eq("agence_id", agence_id).eq("code_postal", code_postal).execute()
-    SUPA.table("prospects").insert(records).execute()
+    supa.table("prospects").delete().eq("agence_id", agence_id).eq("code_postal", code_postal).execute()
+    supa.table("prospects").insert(records).execute()
     print(f"Inserted {len(records)} prospects for zone {code_postal}")
 
 
