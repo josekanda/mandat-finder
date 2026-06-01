@@ -2,11 +2,14 @@ import Link from "next/link";
 import { ScrollProgress } from "@/components/motion/scroll-progress";
 import Reveal from "@/components/motion/reveal";
 import Parallax from "@/components/motion/parallax";
+import ParallaxScale from "@/components/motion/parallax-scale";
+import WordReveal from "@/components/motion/word-reveal";
+import StepRail from "@/components/motion/step-rail";
 
-const trustItems = ["Agences locales", "Prospection ciblée", "Supabase sécurisé", "Pipeline exploitable"];
+const trustItems = ["Courtiers locaux", "Prospection ciblée", "Supabase sécurisé", "Pipeline exploitable"];
 
 const signals = [
-  "DPE F / G",
+  "Année de construction",
   "Années de détention",
   "Adresse et zone ciblée",
   "Score de priorité",
@@ -15,19 +18,19 @@ const signals = [
 const faqs = [
   {
     q: "À qui s’adresse Mandat Finder ?",
-    a: "Aux agences immobilières qui veulent détecter plus vite les biens à potentiel et structurer leur prospection sans se perdre dans des fichiers bruts.",
+    a: "Aux agences de courtage qui veulent détecter plus vite les propriétés à potentiel et structurer leur prospection sans se perdre dans des fichiers bruts.",
   },
   {
     q: "Est-ce un CRM complet ?",
     a: "Non, l’objectif premier est d’identifier, comprendre et qualifier les opportunités avant ou au début du suivi commercial.",
   },
   {
-    q: "Comment les prospects sont-ils priorisés ?",
-    a: "La plateforme combine plusieurs signaux simples comme le DPE, la zone, l’ancienneté de détention et un score de priorité lisible.",
+    q: "Comment les propriétés sont-elles priorisées ?",
+    a: "La plateforme combine plusieurs signaux : l’année de construction, la zone, l’ancienneté de détention et un score de priorité lisible.",
   },
   {
     q: "Peut-on commencer petit ?",
-    a: "Oui, tu peux démarrer sur une seule ville ou un seul code postal, puis élargir le périmètre au fur et à mesure.",
+    a: "Oui, tu peux démarrer sur un seul code postal québécois, puis élargir le périmètre au fur et à mesure.",
   },
 ];
 
@@ -72,9 +75,12 @@ export default function HomePage() {
               Prospection immobilière ciblée pour agences locales
             </div>
 
-            <h1 className="mt-6 max-w-4xl text-5xl font-semibold tracking-tight text-neutral-950 sm:text-6xl">
+            <WordReveal
+              as="h1"
+              className="mt-6 max-w-4xl text-5xl font-semibold tracking-tight text-neutral-950 sm:text-6xl"
+            >
               Trouve les biens à potentiel avant qu’ils deviennent des mandats pour les autres.
-            </h1>
+            </WordReveal>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-neutral-600">
               Mandat Finder aide les agences à cibler les bonnes zones, comprendre les signaux utiles
@@ -98,14 +104,23 @@ export default function HomePage() {
           </div>
         </Reveal>
 
+        <div className="relative">
+          <Parallax offset={40}>
+            <div className="pointer-events-none absolute -left-16 -top-16 h-80 w-80 rounded-full bg-blue-100/50 blur-3xl" />
+          </Parallax>
+          <Parallax offset={-28}>
+            <div className="pointer-events-none absolute -right-8 bottom-0 h-64 w-64 rounded-full bg-emerald-100/40 blur-3xl" />
+          </Parallax>
+
         <Parallax offset={18}>
+          <ParallaxScale>
           <Reveal delay={0.08}>
             <div className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6">
               <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-neutral-500">Vue synthèse</p>
-                    <p className="mt-1 text-2xl font-semibold text-neutral-950">Villeurbanne · 69100</p>
+                    <p className="mt-1 text-2xl font-semibold text-neutral-950">Rosemont · H2S 1X3</p>
                   </div>
                   <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
                     Score 86
@@ -114,8 +129,8 @@ export default function HomePage() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-white p-4">
-                    <p className="text-xs text-neutral-500">DPE</p>
-                    <p className="mt-2 text-xl font-semibold text-neutral-950">F</p>
+                    <p className="text-xs text-neutral-500">Construit en</p>
+                    <p className="mt-2 text-xl font-semibold text-neutral-950">1958</p>
                   </div>
                   <div className="rounded-xl bg-white p-4">
                     <p className="text-xs text-neutral-500">Statut</p>
@@ -133,7 +148,9 @@ export default function HomePage() {
               </div>
             </div>
           </Reveal>
+          </ParallaxScale>
         </Parallax>
+        </div>
       </section>
 
       <section className="border-y border-neutral-200 bg-white">
@@ -150,9 +167,9 @@ export default function HomePage() {
         <Reveal>
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-neutral-500">Pourquoi ça change la donne</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-950">
+            <WordReveal as="h2" className="mt-2 text-3xl font-semibold tracking-tight text-neutral-950">
               Une interface simple pour passer de la donnée brute à une action commerciale claire.
-            </h2>
+            </WordReveal>
           </div>
         </Reveal>
 
@@ -225,6 +242,7 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <ParallaxScale>
           <Reveal>
             <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
               <p className="text-sm font-medium text-neutral-500">Screenshot produit</p>
@@ -237,17 +255,18 @@ export default function HomePage() {
               </div>
             </div>
           </Reveal>
+          </ParallaxScale>
 
           <Reveal delay={0.06}>
             <div id="exemple" className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
-              <p className="text-sm font-medium text-neutral-500">Exemple Villeurbanne</p>
+              <p className="text-sm font-medium text-neutral-500">Exemple Rosemont</p>
               <h2 className="mt-2 text-2xl font-semibold text-neutral-950">
                 Un test local, concret et rapide à comprendre.
               </h2>
               <p className="mt-4 text-sm leading-6 text-neutral-600">
-                L’agence active 69100, affiche les prospects scorés, visualise les adresses sur la carte,
-                puis traite les biens chauds en priorité. Le but n’est pas de tout prédire, mais d’aider
-                l’équipe à mieux décider où appeler en premier.
+                L’agence de courtage active H2S, affiche les propriétés scorées, visualise les adresses
+                sur la carte, puis traite les biens chauds en priorité. Le but n’est pas de tout prédire,
+                mais d’aider l’équipe à mieux décider où appeler en premier.
               </p>
             </div>
           </Reveal>
@@ -263,21 +282,7 @@ export default function HomePage() {
             </h2>
           </Reveal>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {[
-              "Définir les zones à suivre.",
-              "Ingest les données brutes.",
-              "Scorer et prioriser les biens.",
-              "Faire avancer le pipeline commercial.",
-            ].map((step, index) => (
-              <Reveal key={step} delay={index * 0.05}>
-                <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-6">
-                  <div className="text-sm font-medium text-neutral-500">0{index + 1}</div>
-                  <p className="mt-3 text-lg font-semibold text-neutral-950">{step}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <StepRail />
         </div>
       </section>
 
@@ -285,12 +290,12 @@ export default function HomePage() {
         <div className="grid gap-4 lg:grid-cols-3">
           {[
             {
-              name: "Agence pilote",
+              name: "Agence de courtage pilote",
               quote:
                 "On comprend enfin pourquoi une adresse remonte et quoi faire ensuite. L’outil aide à prioriser sans compliquer le travail.",
             },
             {
-              name: "Responsable prospection",
+              name: "Courtier responsable de la prospection",
               quote:
                 "La carte et le statut pipeline rendent la base beaucoup plus actionnable qu’un simple export brut.",
             },
