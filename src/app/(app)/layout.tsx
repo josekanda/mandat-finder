@@ -32,7 +32,7 @@ export default async function AppLayout({
               Mandat Finder
             </Link>
             <p className="mt-1 text-sm text-neutral-500">
-              Espace agence
+              Espace de courtage
             </p>
           </div>
 
@@ -61,7 +61,7 @@ export default async function AppLayout({
             <div className="flex h-16 items-center justify-between px-4 sm:px-6">
               <div>
                 <p className="text-sm font-medium text-neutral-900">
-                  Espace agence
+                  Espace de courtage
                 </p>
                 <p className="text-xs text-neutral-500">
                   Prospection immobilière ciblée
