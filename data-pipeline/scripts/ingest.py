@@ -46,76 +46,54 @@ PROSPECTS_COLS = [
 
 def fetch_evaluation_fonciere(code_postal: str) -> pd.DataFrame:
     """
-    Source : Données Québec — Rôle d'évaluation foncière municipale (MAMH).
+    Source : MAMH — Rôles d'évaluation foncière du Québec.
     https://www.donneesquebec.ca/recherche/dataset/roles-d-evaluation-fonciere-du-quebec
 
-    ARCHITECTURE RÉELLE (à implémenter en prod) :
-    Les données ne sont PAS dans le datastore CKAN requêtable par code postal.
-    Elles sont distribuées en archives ZIP par municipalité.
+    ARCHITECTURE (2 étapes) :
 
-    Intégration complète requiert :
-      1. Télécharger l'index CSV 2026 (resource_id: c0e65c47-fcc1-40e4-bc2e-7baa74bc164a)
-         via https://www.donneesquebec.ca/api/3/action/datastore_search
-         pour trouver l'URL du ZIP de la bonne municipalité (via code_postal → NOM_MUNICIPALITE)
-      2. Télécharger le ZIP de la municipalité
-      3. Extraire et parser les fichiers XML/CSV qu'il contient
-      4. Filtrer par CODE_POSTAL localement
+    Étape 1 — Index des municipalités (1 Mo, CSV, mise à jour trimestrielle) :
+      URL directe : https://mamh.gouv.qc.ca/role/indexRole.csv
+      resource_id Données Québec : 347f60d1-a1d9-406e-a5a8-d1672ece32fb
+      Colonnes à vérifier : municipality code, NOM_MUNICIPALITE, URL du fichier ZIP
 
-    Alternative : CSV géoréférencé 2024 complet (tout le Québec, ~1 Go) :
-      resource_id: fe31dfcd-0753-4769-9868-d897d9c5a0ba
-      À télécharger une fois et indexer localement (DuckDB, SQLite, etc.)
+    Étape 2 — Fichier de propriétés de la municipalité :
+      Chaque ligne de l'index pointe vers un ZIP ou CSV par municipalité.
+      Télécharger → extraire → parser → filtrer par code_postal localement.
 
-    En attendant cette intégration, la fonction retourne un DataFrame vide et
-    normalize_and_join utilise exclusivement les données du cadastre_mock.csv.
+    TODO : implémenter les 2 étapes ci-dessus quand les noms de colonnes
+    de l'index sont confirmés (ouvrir indexRole.csv et noter les colonnes).
+    En attendant, retourne DataFrame vide → normalize_and_join utilise cadastre_mock.csv.
+
+    Ressources utiles :
+      - Index trimestriel resource_id : 347f60d1-a1d9-406e-a5a8-d1672ece32fb
+      - CSV géoréférencé 2024 complet (~1 Go) resource_id : fe31dfcd-0753-4769-9868-d897d9c5a0ba
     """
     import httpx
-    # Le datastore CKAN retourne 404 pour les ressources de propriétés individuelles —
-    # elles sont disponibles en téléchargement fichier uniquement (voir docstring ci-dessus).
-    url = "https://www.donneesquebec.ca/api/3/action/datastore_search"
-    resource_id = "fe31dfcd-0753-4769-9868-d897d9c5a0ba"  # géoréférencé 2024
-    rows = []
-    offset = 0
-    limit = 1000
-    max_records = 10000
+    index_url = "https://mamh.gouv.qc.ca/role/indexRole.csv"
     try:
         with httpx.Client(timeout=30) as client:
-            while len(rows) < max_records:
-                resp = client.get(url, params={
-                    "resource_id": resource_id,
-                    "limit": limit,
-                    "offset": offset,
-                    "filters": json.dumps({"CODE_POSTAL": code_postal}),
-                })
-                if resp.status_code == 404:
-                    break
-                resp.raise_for_status()
-                body = resp.json()
-                batch = body.get("result", {}).get("records", [])
-                if not batch:
-                    break
-                rows.extend(batch)
-                offset += limit
-                if offset >= min(body.get("result", {}).get("total", 0), max_records):
-                    break
-    except httpx.HTTPError:
-        pass
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-    rename_map = {
-        "CODE_POSTAL": "code_postal",
-        "ADRESSE": "adresse",
-        "ANNEE_CONSTRUCTION": "annee_construction",
-        "CATEGORIE_UTILISATION": "type_immeuble",
-        "NOMBRE_LOGEMENTS": "nb_logements",
-        "VALEUR_EVALUATION": "evaluation_municipale",
-    }
-    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
-    if "_geopoint" in df.columns:
-        coords = df["_geopoint"].astype(str).str.split(",", expand=True)
-        df["latitude"] = pd.to_numeric(coords[0], errors="coerce")
-        df["longitude"] = pd.to_numeric(coords[1], errors="coerce")
-    return df
+            # Étape 1 : télécharger l'index des municipalités
+            resp = client.get(index_url)
+            resp.raise_for_status()
+            import io
+            index_df = pd.read_csv(io.StringIO(resp.text))
+
+            # TODO : identifier la colonne URL dans l'index et le nom de colonne du code postal
+            # Exemple (à adapter selon colonnes réelles) :
+            # url_col = "URL_FICHIER"  # nom de colonne à vérifier
+            # muni_row = index_df[index_df["CODE_POSTAL_PREFIXE"] == code_postal[:3]]
+            # if muni_row.empty:
+            #     return pd.DataFrame()
+            # fichier_url = muni_row.iloc[0][url_col]
+            # Étape 2 : télécharger et parser le fichier de la municipalité
+            # ... (à implémenter une fois les colonnes de l'index connues)
+
+            print(f"[fetch_evaluation_fonciere] Index téléchargé, colonnes: {list(index_df.columns)}")
+            return pd.DataFrame()
+
+    except httpx.HTTPError as e:
+        print(f"[fetch_evaluation_fonciere] Erreur réseau: {e} — utilisation des données mock")
+        return pd.DataFrame()
 
 
 def fetch_cadastre(code_postal: str) -> pd.DataFrame:
