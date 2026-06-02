@@ -44,52 +44,74 @@ PROSPECTS_COLS = [
 ]
 
 
-def fetch_evaluation_fonciere(code_postal: str) -> pd.DataFrame:
+def fetch_evaluation_fonciere(code_postal: str, code_geo: str | None = None) -> pd.DataFrame:
     """
     Source : MAMH — Rôles d'évaluation foncière du Québec.
     https://www.donneesquebec.ca/recherche/dataset/roles-d-evaluation-fonciere-du-quebec
 
-    ARCHITECTURE (2 étapes) :
+    Colonnes confirmées de l'index (indexRole.csv) :
+      - "lien"             : URL du fichier de données de la municipalité
+      - "code géographique": code géographique municipal (ex: 66023 pour Montréal)
 
-    Étape 1 — Index des municipalités (1 Mo, CSV, mise à jour trimestrielle) :
-      URL directe : https://mamh.gouv.qc.ca/role/indexRole.csv
-      resource_id Données Québec : 347f60d1-a1d9-406e-a5a8-d1672ece32fb
-      Colonnes à vérifier : municipality code, NOM_MUNICIPALITE, URL du fichier ZIP
+    Paramètre code_geo : passer le code géographique MAMH de la municipalité cible.
+      Exemple : python ingest.py --zone "H2S 1X3" --code-geo 66023
 
-    Étape 2 — Fichier de propriétés de la municipalité :
-      Chaque ligne de l'index pointe vers un ZIP ou CSV par municipalité.
-      Télécharger → extraire → parser → filtrer par code_postal localement.
-
-    TODO : implémenter les 2 étapes ci-dessus quand les noms de colonnes
-    de l'index sont confirmés (ouvrir indexRole.csv et noter les colonnes).
-    En attendant, retourne DataFrame vide → normalize_and_join utilise cadastre_mock.csv.
-
-    Ressources utiles :
-      - Index trimestriel resource_id : 347f60d1-a1d9-406e-a5a8-d1672ece32fb
-      - CSV géoréférencé 2024 complet (~1 Go) resource_id : fe31dfcd-0753-4769-9868-d897d9c5a0ba
+    TODO après intégration complète :
+      - Vérifier le format exact des fichiers municipaux (ZIP/XML ou CSV) en ouvrant
+        un "lien" de l'index dans un navigateur
+      - Adapter rename_map aux vrais noms de colonnes du fichier municipal
     """
-    import httpx
+    import httpx, io
+
+    if code_geo is None:
+        print("[fetch_evaluation_fonciere] --code-geo non fourni — utilisation des données mock")
+        return pd.DataFrame()
+
     index_url = "https://mamh.gouv.qc.ca/role/indexRole.csv"
     try:
-        with httpx.Client(timeout=30) as client:
-            # Étape 1 : télécharger l'index des municipalités
+        with httpx.Client(timeout=60, follow_redirects=True) as client:
+            # Étape 1 : télécharger l'index (1 Mo, trimestriel)
             resp = client.get(index_url)
             resp.raise_for_status()
-            import io
             index_df = pd.read_csv(io.StringIO(resp.text))
 
-            # TODO : identifier la colonne URL dans l'index et le nom de colonne du code postal
-            # Exemple (à adapter selon colonnes réelles) :
-            # url_col = "URL_FICHIER"  # nom de colonne à vérifier
-            # muni_row = index_df[index_df["CODE_POSTAL_PREFIXE"] == code_postal[:3]]
-            # if muni_row.empty:
-            #     return pd.DataFrame()
-            # fichier_url = muni_row.iloc[0][url_col]
-            # Étape 2 : télécharger et parser le fichier de la municipalité
-            # ... (à implémenter une fois les colonnes de l'index connues)
+            # Colonnes confirmées : "lien" et "code géographique"
+            row = index_df[index_df["code géographique"].astype(str) == str(code_geo)]
+            if row.empty:
+                print(f"[fetch_evaluation_fonciere] code géographique {code_geo} introuvable dans l'index")
+                return pd.DataFrame()
 
-            print(f"[fetch_evaluation_fonciere] Index téléchargé, colonnes: {list(index_df.columns)}")
-            return pd.DataFrame()
+            fichier_url = row.iloc[0]["lien"]
+            print(f"[fetch_evaluation_fonciere] Fichier municipal: {fichier_url}")
+
+            # Étape 2 : télécharger le fichier de la municipalité
+            resp2 = client.get(fichier_url, timeout=120)
+            resp2.raise_for_status()
+
+            # TODO : adapter si le format est ZIP/XML (utiliser zipfile + xml.etree)
+            df = pd.read_csv(io.StringIO(resp2.text), low_memory=False)
+
+            # TODO : vérifier les vrais noms de colonnes en ouvrant un fichier municipal
+            rename_map = {
+                "CODE_POSTAL": "code_postal",
+                "ADRESSE": "adresse",
+                "ANNEE_CONSTRUCTION": "annee_construction",
+                "CATEGORIE_UTILISATION": "type_immeuble",
+                "NOMBRE_LOGEMENTS": "nb_logements",
+                "VALEUR_EVALUATION": "evaluation_municipale",
+            }
+            df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+            if "code_postal" in df.columns:
+                df = df[df["code_postal"].astype(str).str.strip() == str(code_postal).strip()]
+
+            if "_geopoint" in df.columns:
+                coords = df["_geopoint"].astype(str).str.split(",", expand=True)
+                df["latitude"] = pd.to_numeric(coords[0], errors="coerce")
+                df["longitude"] = pd.to_numeric(coords[1], errors="coerce")
+
+            print(f"[fetch_evaluation_fonciere] {len(df)} propriétés pour {code_postal}")
+            return df
 
     except httpx.HTTPError as e:
         print(f"[fetch_evaluation_fonciere] Erreur réseau: {e} — utilisation des données mock")
@@ -154,8 +176,8 @@ def normalize_and_join(mamh: pd.DataFrame, cad: pd.DataFrame, trans: pd.DataFram
     return df
 
 
-def join_all(code_postal: str) -> pd.DataFrame:
-    mamh = fetch_evaluation_fonciere(code_postal)
+def join_all(code_postal: str, code_geo: str | None = None) -> pd.DataFrame:
+    mamh = fetch_evaluation_fonciere(code_postal, code_geo)
     cad = fetch_cadastre(code_postal)
     trans = fetch_transactions(code_postal)
     req = fetch_req(code_postal)
@@ -205,10 +227,10 @@ def get_agence_id() -> str:
     return result.data[0]["id"]
 
 
-def ingest(code_postal: str):
+def ingest(code_postal: str, code_geo: str | None = None):
     supa = _get_supa()
     agence_id = get_agence_id()
-    df = join_all(code_postal)
+    df = join_all(code_postal, code_geo)
     df["agence_id"] = agence_id
     df["score"] = df.apply(score_row, axis=1).fillna(0)
 
@@ -230,5 +252,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--zone", required=True, help="code postal québécois (ex: H2S 1X3)")
+    parser.add_argument("--code-geo", default=None, dest="code_geo",
+                        help="code géographique MAMH de la municipalité (ex: 66023 pour Montréal). "
+                             "Trouver dans https://mamh.gouv.qc.ca/role/indexRole.csv")
     args = parser.parse_args()
-    ingest(args.zone)
+    ingest(args.zone, args.code_geo)
