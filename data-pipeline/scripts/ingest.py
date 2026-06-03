@@ -339,6 +339,11 @@ def ingest(code_postal: str, code_geo: str | None = None):
 
     df["score"] = df["score"].fillna(0).astype(int)
 
+    # Pandera coerce en float — recaster les colonnes integer pour Supabase
+    for col in ["annee_construction", "nb_logements"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").round().astype("Int64")
+
     cols = [c for c in PROSPECTS_COLS if c in df.columns]
     records = json.loads(df[cols].to_json(orient="records"))
 
