@@ -340,7 +340,7 @@ def ingest(code_postal: str, code_geo: str | None = None):
     df["score"] = df["score"].fillna(0).astype(int)
 
     # Pandera coerce en float — recaster les colonnes integer pour Supabase
-    for col in ["annee_construction", "nb_logements"]:
+    for col in ["annee_construction", "nb_logements", "annees_detention"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").round().astype("Int64")
 
