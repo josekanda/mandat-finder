@@ -44,22 +44,147 @@ PROSPECTS_COLS = [
 ]
 
 
+def _cubf_to_type(cubf: str) -> str:
+    """Convertit le code CUBF MAMH en type d'immeuble lisible."""
+    try:
+        code = int(cubf)
+    except (ValueError, TypeError):
+        return cubf
+    if code == 1100:
+        return "Maison unifamiliale"
+    if code == 1200:
+        return "Maison jumelée/rangée"
+    if code == 1300:
+        return "Duplex"
+    if code == 1400:
+        return "Triplex"
+    if code == 1500:
+        return "Quadruplex"
+    if code == 1600:
+        return "Quintuplex"
+    if 1700 <= code <= 1799:
+        return "Immeuble résidentiel"
+    if 2000 <= code <= 2999:
+        return "Condo"
+    return cubf
+
+
+def _parse_mamh_xml(xml_bytes: bytes, code_postal: str) -> pd.DataFrame:
+    """
+    Parse le XML MAMH (schéma RL.xsd v2.9).
+
+    Structure confirmée :
+      <RLUEx>                          — une propriété
+        <RL0101><RL0101x>
+          <RL0101Ax> civic_from        — numéro civique début
+          <RL0101Cx> civic_to          — numéro civique fin (optionnel)
+          <RL0101Ex> type_rue          — RU, AV, BD, CH…
+          <RL0101Gx> nom_rue           — nom de la rue
+          <RL0101Hx> direction         — O, E, N, S (optionnel)
+        <RL0105A>  cubf               — code d'utilisation (1100=maison, 1300=duplex…)
+        <RL0201><RL0201x>
+          <RL0201Gx> date_acquisition  — YYYY-MM-DD
+          <RL0201Hx> nature_droit      — 1=pers. physique, 2=pers. morale (société)
+        <RL0307A>  annee_construction  — ex: 1880
+        <RL0311A>  nb_logements        — nombre de logements
+        <RL0404A>  evaluation_totale   — valeur totale (terrain + bâtiment)
+
+    Note : le XML MAMH ne contient pas de code postal Canada Post.
+    Le paramètre code_postal est utilisé comme label de zone dans Supabase.
+    Seules les propriétés résidentielles (CUBF 1100–2999) sont retenues.
+    """
+    import xml.etree.ElementTree as ET
+    from datetime import date
+
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as e:
+        print(f"[_parse_mamh_xml] Erreur XML: {e}")
+        return pd.DataFrame()
+
+    records = []
+    today = date.today()
+
+    for unite in root.findall("RLUEx"):
+        # Filtre résidentiel : CUBF 1100–2999
+        cubf = unite.findtext("RL0105A", "0")
+        try:
+            cubf_int = int(cubf)
+        except ValueError:
+            continue
+        if not (1100 <= cubf_int <= 2999):
+            continue
+
+        rec: dict = {"code_postal": code_postal}
+
+        # Adresse
+        rl0101 = unite.find("RL0101")
+        if rl0101 is not None:
+            rl0101x = rl0101.find("RL0101x")
+            if rl0101x is not None:
+                num_a = rl0101x.findtext("RL0101Ax", "").strip()
+                num_c = rl0101x.findtext("RL0101Cx", "").strip()
+                type_rue = rl0101x.findtext("RL0101Ex", "").strip()
+                nom_rue = rl0101x.findtext("RL0101Gx", "").strip()
+                direction = rl0101x.findtext("RL0101Hx", "").strip()
+                civic = f"{num_a}-{num_c}" if num_c and num_c != num_a else num_a
+                rec["adresse"] = " ".join(p for p in [civic, type_rue, nom_rue, direction] if p)
+
+        # Type d'immeuble
+        rec["type_immeuble"] = _cubf_to_type(cubf)
+
+        # Année de construction
+        annee = unite.findtext("RL0307A")
+        if annee:
+            try:
+                rec["annee_construction"] = int(annee)
+            except ValueError:
+                pass
+
+        # Nombre de logements
+        nb = unite.findtext("RL0311A")
+        if nb:
+            try:
+                rec["nb_logements"] = int(nb)
+            except ValueError:
+                pass
+
+        # Évaluation municipale totale
+        valeur = unite.findtext("RL0404A")
+        if valeur:
+            try:
+                rec["evaluation_municipale"] = float(valeur)
+            except ValueError:
+                pass
+
+        # Années de détention (depuis date d'acquisition)
+        rl0201 = unite.find("RL0201")
+        if rl0201 is not None:
+            rl0201x = rl0201.find("RL0201x")
+            if rl0201x is not None:
+                date_acq = rl0201x.findtext("RL0201Gx", "")
+                try:
+                    acq = date.fromisoformat(date_acq)
+                    rec["annees_detention"] = (today - acq).days / 365.25
+                except ValueError:
+                    pass
+                # Société propriétaire : nature_droit 2 = personne morale
+                rec["is_societe"] = rl0201x.findtext("RL0201Hx", "1") == "2"
+
+        records.append(rec)
+
+    df = pd.DataFrame(records)
+    print(f"[_parse_mamh_xml] {len(df)} propriétés résidentielles parsées")
+    return df
+
+
 def fetch_evaluation_fonciere(code_postal: str, code_geo: str | None = None) -> pd.DataFrame:
     """
     Source : MAMH — Rôles d'évaluation foncière du Québec.
-    https://www.donneesquebec.ca/recherche/dataset/roles-d-evaluation-fonciere-du-quebec
-
-    Colonnes confirmées de l'index (indexRole.csv) :
-      - "lien"             : URL du fichier de données de la municipalité
-      - "code géographique": code géographique municipal (ex: 66023 pour Montréal)
-
-    Paramètre code_geo : passer le code géographique MAMH de la municipalité cible.
-      Exemple : python ingest.py --zone "H2S 1X3" --code-geo 66023
-
-    TODO après intégration complète :
-      - Vérifier le format exact des fichiers municipaux (ZIP/XML ou CSV) en ouvrant
-        un "lien" de l'index dans un navigateur
-      - Adapter rename_map aux vrais noms de colonnes du fichier municipal
+    Index : https://mamh.gouv.qc.ca/role/indexRole.csv
+    Colonnes index confirmées : "lien", "code géographique"
+    Format fichier municipal confirmé : XML (RL.xsd v2.9)
+    Ex: python ingest.py --zone "H2S 1X3" --code-geo 66023
     """
     import httpx, io
 
@@ -70,12 +195,10 @@ def fetch_evaluation_fonciere(code_postal: str, code_geo: str | None = None) -> 
     index_url = "https://mamh.gouv.qc.ca/role/indexRole.csv"
     try:
         with httpx.Client(timeout=60, follow_redirects=True) as client:
-            # Étape 1 : télécharger l'index (1 Mo, trimestriel)
             resp = client.get(index_url)
             resp.raise_for_status()
             index_df = pd.read_csv(io.StringIO(resp.text))
 
-            # Colonnes confirmées : "lien" et "code géographique"
             row = index_df[index_df["code géographique"].astype(str) == str(code_geo)]
             if row.empty:
                 print(f"[fetch_evaluation_fonciere] code géographique {code_geo} introuvable dans l'index")
@@ -84,34 +207,10 @@ def fetch_evaluation_fonciere(code_postal: str, code_geo: str | None = None) -> 
             fichier_url = row.iloc[0]["lien"]
             print(f"[fetch_evaluation_fonciere] Fichier municipal: {fichier_url}")
 
-            # Étape 2 : télécharger le fichier de la municipalité
-            resp2 = client.get(fichier_url, timeout=120)
+            resp2 = client.get(fichier_url, timeout=300)
             resp2.raise_for_status()
 
-            # TODO : adapter si le format est ZIP/XML (utiliser zipfile + xml.etree)
-            df = pd.read_csv(io.StringIO(resp2.text), low_memory=False)
-
-            # TODO : vérifier les vrais noms de colonnes en ouvrant un fichier municipal
-            rename_map = {
-                "CODE_POSTAL": "code_postal",
-                "ADRESSE": "adresse",
-                "ANNEE_CONSTRUCTION": "annee_construction",
-                "CATEGORIE_UTILISATION": "type_immeuble",
-                "NOMBRE_LOGEMENTS": "nb_logements",
-                "VALEUR_EVALUATION": "evaluation_municipale",
-            }
-            df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
-
-            if "code_postal" in df.columns:
-                df = df[df["code_postal"].astype(str).str.strip() == str(code_postal).strip()]
-
-            if "_geopoint" in df.columns:
-                coords = df["_geopoint"].astype(str).str.split(",", expand=True)
-                df["latitude"] = pd.to_numeric(coords[0], errors="coerce")
-                df["longitude"] = pd.to_numeric(coords[1], errors="coerce")
-
-            print(f"[fetch_evaluation_fonciere] {len(df)} propriétés pour {code_postal}")
-            return df
+            return _parse_mamh_xml(resp2.content, code_postal)
 
     except httpx.HTTPError as e:
         print(f"[fetch_evaluation_fonciere] Erreur réseau: {e} — utilisation des données mock")
