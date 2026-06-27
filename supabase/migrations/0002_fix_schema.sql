@@ -13,6 +13,9 @@ alter table zones
 -- 3. Enable RLS on zones
 alter table zones enable row level security;
 
+drop policy if exists "agence voit ses zones" on zones;
+drop policy if exists "agence gere ses zones" on zones;
+
 create policy "agence voit ses zones"
   on zones for select
   to authenticated

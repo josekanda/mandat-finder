@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*.local
+
+# data-pipeline — fichiers éphémères
+data-pipeline/geocode_cache.json
+data-pipeline/geocode_skip_ids.json
+data-pipeline/scripts/__pycache__/
+data-pipeline/tests/__pycache__/
+
+# dossiers personnels
+.claude/
+LES REFERENCES/

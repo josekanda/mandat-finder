@@ -3,16 +3,23 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import ProspectStatusSelect from "@/components/prospect-status-select";
+import ProspectMap from "@/components/prospect-map";
+import GeocodeButton from "@/components/geocode-button";
 
 type ProspectDetail = {
   id: string;
   adresse: string | null;
   code_postal: string | null;
+  municipalite: string | null;
+  region_administrative: string | null;
+  mrc: string | null;
   score: number | null;
   annee_construction: number | null;
+  annees_detention: number | null;
   evaluation_municipale: number | null;
   type_immeuble: string | null;
   nb_logements: number | null;
+  is_societe: boolean | null;
   statut: string | null;
   notes: string | null;
   source: string | null;
@@ -94,11 +101,16 @@ export default async function ProspectDetailPage({ params }: PageProps) {
   id,
   adresse,
   code_postal,
+  municipalite,
+  region_administrative,
+  mrc,
   score,
   annee_construction,
+  annees_detention,
   evaluation_municipale,
   type_immeuble,
   nb_logements,
+  is_societe,
   statut,
   notes,
   source,
@@ -176,47 +188,124 @@ export default async function ProspectDetailPage({ params }: PageProps) {
         </p>
       </section>
 
+      {prospect.latitude != null && prospect.longitude != null && (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+          <p className="mb-3 text-sm font-medium text-neutral-500">
+            Localisation · {prospect.latitude.toFixed(5)}, {prospect.longitude.toFixed(5)}
+          </p>
+          <ProspectMap
+            latitude={prospect.latitude}
+            longitude={prospect.longitude}
+            adresse={prospect.adresse}
+          />
+        </section>
+      )}
+
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-6">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-neutral-950">Signaux</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Score</p>
-                <p className="mt-2 text-2xl font-semibold text-neutral-950">
-                  {prospect.score ?? "—"}
-                </p>
-              </div>
 
+          {/* Couche 1 — Géographique */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 1 · Géographique</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Municipalité</p>
+                <p className="mt-1 font-semibold text-neutral-950">{prospect.municipalite ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Code postal</p>
+                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                  {prospect.latitude != null ? (
+                    <span className="font-semibold text-neutral-950">{prospect.code_postal ?? "—"}</span>
+                  ) : (
+                    <>
+                      <span className="text-sm text-neutral-400 italic">Non géocodé</span>
+                      <GeocodeButton prospectId={prospect.id} />
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Région administrative</p>
+                <p className="mt-1 font-semibold text-neutral-950">{prospect.region_administrative ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">MRC</p>
+                <p className="mt-1 text-sm font-semibold text-neutral-950">{prospect.mrc ?? "—"}</p>
+              </div>
+              {prospect.latitude != null && (
+                <div className="rounded-xl bg-neutral-50 p-4 sm:col-span-2">
+                  <p className="text-sm text-neutral-500">Coordonnées GPS</p>
+                  <p className="mt-1 font-mono text-sm text-neutral-950">
+                    {prospect.latitude.toFixed(5)}, {prospect.longitude?.toFixed(5)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Couche 2 — Foncière */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 2 · Foncière</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Type d'immeuble</p>
+                <p className="mt-1 font-semibold text-neutral-950">{prospect.type_immeuble ?? "—"}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Nombre de logements</p>
+                <p className="mt-1 text-2xl font-semibold text-neutral-950">{prospect.nb_logements ?? "—"}</p>
+              </div>
               <div className="rounded-xl bg-neutral-50 p-4">
                 <p className="text-sm text-neutral-500">Année de construction</p>
-                <p className="mt-2 text-2xl font-semibold text-neutral-950">
-                  {prospect.annee_construction ?? "—"}
-                </p>
+                <p className="mt-1 text-2xl font-semibold text-neutral-950">{prospect.annee_construction ?? "—"}</p>
               </div>
-
               <div className="rounded-xl bg-neutral-50 p-4">
                 <p className="text-sm text-neutral-500">Évaluation municipale</p>
-                <p className="mt-2 text-xl font-semibold text-neutral-950">
+                <p className="mt-1 text-xl font-semibold text-neutral-950">
                   {prospect.evaluation_municipale
                     ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(prospect.evaluation_municipale)
                     : "—"}
                 </p>
               </div>
+            </div>
+          </div>
 
+          {/* Couche 3 — Signaux */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 3 · Signaux</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Type d'immeuble</p>
-                <p className="mt-2 text-xl font-semibold text-neutral-950">
-                  {prospect.type_immeuble ?? "—"}
-                  {prospect.nb_logements ? ` · ${prospect.nb_logements} log.` : ""}
+                <p className="text-sm text-neutral-500">Score global</p>
+                <p className="mt-1 text-3xl font-bold text-neutral-950">
+                  {prospect.score ?? "—"}<span className="text-base font-normal text-neutral-400"> /100</span>
                 </p>
               </div>
-
               <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Coordonnées</p>
-                <p className="mt-2 text-sm font-medium text-neutral-900">
-                  {prospect.latitude ?? "—"}, {prospect.longitude ?? "—"}
+                <p className="text-sm text-neutral-500">Durée de détention</p>
+                <p className={`mt-1 text-2xl font-semibold ${(prospect.annees_detention ?? 0) > 15 ? "text-emerald-600" : "text-neutral-950"}`}>
+                  {prospect.annees_detention != null ? `${Math.round(prospect.annees_detention)} ans` : "—"}
                 </p>
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Évaluation municipale</p>
+                <p className={`mt-1 text-2xl font-semibold ${(prospect.evaluation_municipale ?? 0) >= 500_000 ? "text-emerald-600" : "text-neutral-950"}`}>
+                  {prospect.evaluation_municipale != null
+                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(prospect.evaluation_municipale)
+                    : "—"}
+                </p>
+                {(prospect.evaluation_municipale ?? 0) >= 500_000 && (
+                  <p className="mt-1 text-xs text-emerald-700">Deal &gt; 500k$ — commission élevée</p>
+                )}
+              </div>
+              <div className="rounded-xl bg-neutral-50 p-4">
+                <p className="text-sm text-neutral-500">Type de propriétaire</p>
+                <p className="mt-1 font-semibold text-neutral-950">
+                  {prospect.is_societe ? "Société (personne morale)" : "Personne physique"}
+                </p>
+                {prospect.is_societe && (
+                  <p className="mt-1 text-xs text-amber-600">Vérifiable au REQ</p>
+                )}
               </div>
             </div>
           </div>

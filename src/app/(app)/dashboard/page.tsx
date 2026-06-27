@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import DashboardCharts from "@/components/dashboard-charts";
+import { getZoneFilters } from "@/lib/zones";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("fr-CA").format(value);
@@ -18,17 +19,25 @@ type ProspectRow = {
 
 export default async function DashboardPage() {
   const supabase = createServiceClient();
+  const zoneFilters = await getZoneFilters();
+  const zoneFilter = zoneFilters?.orFilter ?? null;
+  const fsaPrefixes = zoneFilters?.fsaPrefixes ?? null;
 
-  const { data: prospects, error } = await supabase
+  let prospectsQuery = supabase
     .from("prospects")
     .select("id, adresse, code_postal, score, annee_construction, statut")
     .order("score", { ascending: false })
-    .limit(12);
+    .limit(500);
+  if (zoneFilter) prospectsQuery = prospectsQuery.or(zoneFilter);
 
-  const { data: chartData } = await supabase
+  let chartQuery = supabase
     .from("prospects")
     .select("annee_construction, statut, score")
     .limit(500);
+  if (zoneFilter) chartQuery = chartQuery.or(zoneFilter);
+
+  const { data: prospects, error } = await prospectsQuery;
+  const { data: chartData } = await chartQuery;
 
   if (error) {
     return (
@@ -52,6 +61,7 @@ export default async function DashboardPage() {
   ).length;
 
   const topProspects = rows.slice(0, 5);
+  const zoneActive = zoneFilters !== null;
 
   return (
     <div className="space-y-8">
@@ -64,6 +74,18 @@ export default async function DashboardPage() {
           Suis les opportunités prioritaires, les biens énergivores et les prospects déjà engagés dans le pipeline.
         </p>
       </section>
+
+      {zoneActive && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <p className="text-sm text-emerald-800">
+            Filtré par zones actives : <span className="font-semibold">{fsaPrefixes!.join(", ")}</span>
+          </p>
+          <Link href="/zones" className="ml-auto text-xs text-emerald-700 underline underline-offset-2">
+            Gérer les zones
+          </Link>
+        </div>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">

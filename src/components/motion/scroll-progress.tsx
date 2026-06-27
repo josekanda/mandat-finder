@@ -9,7 +9,8 @@ export function ScrollProgress() {
   return (
     <motion.div
       style={{ scaleX, transformOrigin: "0% 50%" }}
-      className="fixed inset-x-0 top-0 z-[60] h-[2px] bg-blue-500"
+      className="fixed inset-x-0 top-0 z-[60] h-[2px]"
+      style={{ background: "var(--brand-accent)" }}
     />
   );
 }
