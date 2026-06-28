@@ -80,7 +80,8 @@ export default function DashboardCharts({ prospects }: Props) {
               <Bar
                 dataKey="count"
                 radius={[4, 4, 0, 0]}
-                onClick={(data: { param: string }) =>
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={(data: any) =>
                   router.push(`/prospects?periode=${data.param}`)
                 }
               >
