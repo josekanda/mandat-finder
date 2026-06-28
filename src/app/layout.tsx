@@ -17,9 +17,9 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Mandat Finder — Prospection immobilière ciblée",
+  title: "Immosignaux — Prospection immobilière ciblée",
   description:
-    "Détectez les propriétés à potentiel, priorisez les opportunités et transformez votre base brute en pipeline commercial exploitable.",
+    "Identifiez les propriétaires les plus susceptibles de vendre grâce aux données officielles du gouvernement du Québec.",
 };
 
 export default function RootLayout({

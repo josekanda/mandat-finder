@@ -28,42 +28,24 @@ type ProspectDetail = {
   longitude: number | null;
 };
 
-type PageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+type PageProps = { params: Promise<{ id: string }> };
 
-function scoreBadgeClass(score: number | null) {
-  if ((score ?? 0) >= 80) return "bg-emerald-100 text-emerald-800";
-  if ((score ?? 0) >= 60) return "bg-amber-100 text-amber-800";
-  return "bg-neutral-100 text-neutral-700";
+function scoreBadge(score: number | null) {
+  const s = score ?? 0;
+  if (s >= 80) return "border-[#C9A84C]/40 bg-[#C9A84C]/15 text-[#C9A84C]";
+  if (s >= 70) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-400";
+  return "border-[#272727] bg-[#1C1C1C] text-[#777]";
 }
-
 
 async function updateProspectStatus(formData: FormData) {
   "use server";
-
   const prospectId = String(formData.get("prospectId") ?? "");
   const nextStatus = String(formData.get("statut") ?? "");
-
-  const allowedStatuses = ["découvert", "contacté", "rdv", "mandat signé"];
-
-  if (!prospectId || !allowedStatuses.includes(nextStatus)) {
-    return;
-  }
-
+  const allowed    = ["découvert", "contacté", "rdv", "mandat signé"];
+  if (!prospectId || !allowed.includes(nextStatus)) return;
   const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("prospects")
-    .update({ statut: nextStatus })
-    .eq("id", prospectId);
-
-  if (error) {
-    redirect(`/prospects/${prospectId}?error=update_failed`);
-  }
-
+  const { error } = await supabase.from("prospects").update({ statut: nextStatus }).eq("id", prospectId);
+  if (error) redirect(`/prospects/${prospectId}?error=update_failed`);
   revalidatePath("/dashboard");
   revalidatePath("/prospects");
   revalidatePath(`/prospects/${prospectId}`);
@@ -71,23 +53,12 @@ async function updateProspectStatus(formData: FormData) {
 
 async function updateProspectNotes(formData: FormData) {
   "use server";
-
   const prospectId = String(formData.get("prospectId") ?? "");
-  const notes = String(formData.get("notes") ?? "");
-
+  const notes      = String(formData.get("notes") ?? "");
   if (!prospectId) return;
-
   const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("prospects")
-    .update({ notes })
-    .eq("id", prospectId);
-
-  if (error) {
-    redirect(`/prospects/${prospectId}?error=notes_failed`);
-  }
-
+  const { error } = await supabase.from("prospects").update({ notes }).eq("id", prospectId);
+  if (error) redirect(`/prospects/${prospectId}?error=notes_failed`);
   revalidatePath(`/prospects/${prospectId}`);
 }
 
@@ -97,107 +68,63 @@ export default async function ProspectDetailPage({ params }: PageProps) {
 
   const { data, error } = await supabase
     .from("prospects")
-    .select(`
-  id,
-  adresse,
-  code_postal,
-  municipalite,
-  region_administrative,
-  mrc,
-  score,
-  annee_construction,
-  annees_detention,
-  evaluation_municipale,
-  type_immeuble,
-  nb_logements,
-  is_societe,
-  statut,
-  notes,
-  source,
-  type_bien,
-  latitude,
-  longitude
-`)
+    .select(`id, adresse, code_postal, municipalite, region_administrative, mrc, score,
+             annee_construction, annees_detention, evaluation_municipale, type_immeuble,
+             nb_logements, is_societe, statut, notes, source, type_bien, latitude, longitude`)
     .eq("id", id)
     .single();
 
-  if (error) {
-    notFound();
-  }
-
-  const prospect = data as unknown as ProspectDetail;
+  if (error) notFound();
+  const p = data as unknown as ProspectDetail;
 
   const timeline = [
-    {
-      label: "Prospect détecté",
-      value: "Ligne créée dans la base",
-      done: true,
-    },
-    {
-      label: "Analyse du potentiel",
-      value: `Score actuel: ${prospect.score ?? "—"}`,
-      done: (prospect.score ?? 0) > 0,
-    },
-    {
-      label: "Premier contact",
-      value: prospect.statut === "découvert" ? "À lancer" : "Engagé",
-      done: ["contacté", "rdv", "mandat signé"].includes(
-        (prospect.statut ?? "").toLowerCase()
-      ),
-    },
-    {
-      label: "Avancement commercial",
-      value: prospect.statut ?? "découvert",
-      done: ["rdv", "mandat signé"].includes(
-        (prospect.statut ?? "").toLowerCase()
-      ),
-    },
+    { label: "Prospect détecté",      value: "Ligne créée dans la base",          done: true },
+    { label: "Analyse du potentiel",  value: `Score actuel : ${p.score ?? "—"}`,   done: (p.score ?? 0) > 0 },
+    { label: "Premier contact",       value: p.statut === "découvert" ? "À lancer" : "Engagé",
+      done: ["contacté", "rdv", "mandat signé"].includes((p.statut ?? "").toLowerCase()) },
+    { label: "Avancement commercial", value: p.statut ?? "découvert",
+      done: ["rdv", "mandat signé"].includes((p.statut ?? "").toLowerCase()) },
   ];
 
   return (
     <div className="space-y-6">
+
+      {/* Breadcrumb + badges */}
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/prospects"
-          className="rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+          className="rounded-lg border border-[#272727] px-3 py-2 text-sm font-medium text-[#777] transition hover:border-[#C9A84C] hover:text-[#C9A84C]"
         >
           ← Retour à la liste
         </Link>
-
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${scoreBadgeClass(
-            prospect.score
-          )}`}
-        >
-          Score {prospect.score ?? "—"}
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${scoreBadge(p.score)}`}>
+          Score {p.score ?? "—"}
         </span>
-
-        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">
-          Construit en {prospect.annee_construction ?? "—"}
-        </span>
+        {p.annee_construction && (
+          <span className="rounded-full border border-[#272727] bg-[#1C1C1C] px-2.5 py-1 text-xs font-medium text-[#777]">
+            Construit en {p.annee_construction}
+          </span>
+        )}
       </div>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-medium text-neutral-500">Fiche prospect</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">
-          {prospect.adresse ?? "Adresse inconnue"}
+      {/* En-tête */}
+      <section className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#C9A84C]">Fiche prospect</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#F0F0F0]">
+          {p.adresse ?? "Adresse inconnue"}
         </h1>
-        <p className="mt-2 text-sm text-neutral-600">
-          Code postal: {prospect.code_postal ?? "—"} · Type de bien: {prospect.type_bien ?? "—"} ·
-          Source: {prospect.source ?? "—"}
+        <p className="mt-2 text-sm text-[#777]">
+          {p.code_postal ?? "—"} · {p.type_bien ?? "—"} · Source : {p.source ?? "—"}
         </p>
       </section>
 
-      {prospect.latitude != null && prospect.longitude != null && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-          <p className="mb-3 text-sm font-medium text-neutral-500">
-            Localisation · {prospect.latitude.toFixed(5)}, {prospect.longitude.toFixed(5)}
+      {/* Carte GPS */}
+      {p.latitude != null && p.longitude != null && (
+        <section className="rounded-2xl border border-[#272727] bg-[#141414] p-4 shadow-sm">
+          <p className="mb-3 text-sm font-medium text-[#777]">
+            Localisation · {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
           </p>
-          <ProspectMap
-            latitude={prospect.latitude}
-            longitude={prospect.longitude}
-            adresse={prospect.adresse}
-          />
+          <ProspectMap latitude={p.latitude} longitude={p.longitude} adresse={p.adresse} />
         </section>
       )}
 
@@ -205,39 +132,39 @@ export default async function ProspectDetailPage({ params }: PageProps) {
         <div className="space-y-6">
 
           {/* Couche 1 — Géographique */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 1 · Géographique</p>
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#C9A84C]">Couche 1 · Géographique</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Municipalité</p>
-                <p className="mt-1 font-semibold text-neutral-950">{prospect.municipalite ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Municipalité</p>
+                <p className="mt-1 font-semibold text-[#F0F0F0]">{p.municipalite ?? "—"}</p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Code postal</p>
-                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                  {prospect.latitude != null ? (
-                    <span className="font-semibold text-neutral-950">{prospect.code_postal ?? "—"}</span>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Code postal</p>
+                <div className="mt-1 flex items-center gap-2 flex-wrap font-semibold text-[#F0F0F0]">
+                  {p.latitude != null ? (
+                    <span>{p.code_postal ?? "—"}</span>
                   ) : (
                     <>
-                      <span className="text-sm text-neutral-400 italic">Non géocodé</span>
-                      <GeocodeButton prospectId={prospect.id} />
+                      <span className="text-sm italic text-[#555]">Non géocodé</span>
+                      <GeocodeButton prospectId={p.id} />
                     </>
                   )}
                 </div>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Région administrative</p>
-                <p className="mt-1 font-semibold text-neutral-950">{prospect.region_administrative ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Région administrative</p>
+                <p className="mt-1 font-semibold text-[#F0F0F0]">{p.region_administrative ?? "—"}</p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">MRC</p>
-                <p className="mt-1 text-sm font-semibold text-neutral-950">{prospect.mrc ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">MRC</p>
+                <p className="mt-1 font-semibold text-[#F0F0F0]">{p.mrc ?? "—"}</p>
               </div>
-              {prospect.latitude != null && (
-                <div className="rounded-xl bg-neutral-50 p-4 sm:col-span-2">
-                  <p className="text-sm text-neutral-500">Coordonnées GPS</p>
-                  <p className="mt-1 font-mono text-sm text-neutral-950">
-                    {prospect.latitude.toFixed(5)}, {prospect.longitude?.toFixed(5)}
+              {p.latitude != null && (
+                <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4 sm:col-span-2">
+                  <p className="text-sm text-[#777]">Coordonnées GPS</p>
+                  <p className="mt-1 font-mono text-sm text-[#F0F0F0]">
+                    {p.latitude.toFixed(5)}, {p.longitude?.toFixed(5)}
                   </p>
                 </div>
               )}
@@ -245,139 +172,137 @@ export default async function ProspectDetailPage({ params }: PageProps) {
           </div>
 
           {/* Couche 2 — Foncière */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 2 · Foncière</p>
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#C9A84C]">Couche 2 · Foncière</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Type d'immeuble</p>
-                <p className="mt-1 font-semibold text-neutral-950">{prospect.type_immeuble ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Type d'immeuble</p>
+                <p className="mt-1 font-semibold text-[#F0F0F0]">{p.type_immeuble ?? "—"}</p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Nombre de logements</p>
-                <p className="mt-1 text-2xl font-semibold text-neutral-950">{prospect.nb_logements ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Nombre de logements</p>
+                <p className="mt-1 text-2xl font-semibold text-[#F0F0F0]">{p.nb_logements ?? "—"}</p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Année de construction</p>
-                <p className="mt-1 text-2xl font-semibold text-neutral-950">{prospect.annee_construction ?? "—"}</p>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Année de construction</p>
+                <p className="mt-1 text-2xl font-semibold text-[#F0F0F0]">{p.annee_construction ?? "—"}</p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Évaluation municipale</p>
-                <p className="mt-1 text-xl font-semibold text-neutral-950">
-                  {prospect.evaluation_municipale
-                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(prospect.evaluation_municipale)
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Évaluation municipale</p>
+                <p className={`mt-1 text-xl font-semibold ${(p.evaluation_municipale ?? 0) >= 500_000 ? "text-[#C9A84C]" : "text-[#F0F0F0]"}`}>
+                  {p.evaluation_municipale
+                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(p.evaluation_municipale)
                     : "—"}
                 </p>
+                {(p.evaluation_municipale ?? 0) >= 500_000 && (
+                  <p className="mt-1 text-xs text-[#C9A84C]">Deal &gt; 500k$ — commission élevée</p>
+                )}
               </div>
             </div>
           </div>
 
           {/* Couche 3 — Signaux */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Couche 3 · Signaux</p>
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#C9A84C]">Couche 3 · Signaux</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Score global</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-950">
-                  {prospect.score ?? "—"}<span className="text-base font-normal text-neutral-400"> /100</span>
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Score global</p>
+                <p className="mt-1 text-3xl font-bold text-[#C9A84C]">
+                  {p.score ?? "—"}<span className="text-base font-normal text-[#555]"> /100</span>
                 </p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Durée de détention</p>
-                <p className={`mt-1 text-2xl font-semibold ${(prospect.annees_detention ?? 0) > 15 ? "text-emerald-600" : "text-neutral-950"}`}>
-                  {prospect.annees_detention != null ? `${Math.round(prospect.annees_detention)} ans` : "—"}
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Durée de détention</p>
+                <p className={`mt-1 text-2xl font-semibold ${(p.annees_detention ?? 0) > 15 ? "text-emerald-400" : "text-[#F0F0F0]"}`}>
+                  {p.annees_detention != null ? `${Math.round(p.annees_detention)} ans` : "—"}
                 </p>
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Évaluation municipale</p>
-                <p className={`mt-1 text-2xl font-semibold ${(prospect.evaluation_municipale ?? 0) >= 500_000 ? "text-emerald-600" : "text-neutral-950"}`}>
-                  {prospect.evaluation_municipale != null
-                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(prospect.evaluation_municipale)
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Évaluation municipale</p>
+                <p className={`mt-1 text-2xl font-semibold ${(p.evaluation_municipale ?? 0) >= 500_000 ? "text-[#C9A84C]" : "text-[#F0F0F0]"}`}>
+                  {p.evaluation_municipale != null
+                    ? new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(p.evaluation_municipale)
                     : "—"}
                 </p>
-                {(prospect.evaluation_municipale ?? 0) >= 500_000 && (
-                  <p className="mt-1 text-xs text-emerald-700">Deal &gt; 500k$ — commission élevée</p>
+                {(p.evaluation_municipale ?? 0) >= 500_000 && (
+                  <p className="mt-1 text-xs text-[#C9A84C]">Deal &gt; 500k$ — commission élevée</p>
                 )}
               </div>
-              <div className="rounded-xl bg-neutral-50 p-4">
-                <p className="text-sm text-neutral-500">Type de propriétaire</p>
-                <p className="mt-1 font-semibold text-neutral-950">
-                  {prospect.is_societe ? "Société (personne morale)" : "Personne physique"}
+              <div className="rounded-xl border border-[#272727] bg-[#1C1C1C] p-4">
+                <p className="text-sm text-[#777]">Type de propriétaire</p>
+                <p className="mt-1 font-semibold text-[#F0F0F0]">
+                  {p.is_societe ? "Société (personne morale)" : "Personne physique"}
                 </p>
-                {prospect.is_societe && (
-                  <p className="mt-1 text-xs text-amber-600">Vérifiable au REQ</p>
+                {p.is_societe && (
+                  <p className="mt-1 text-xs text-[#C9A84C]">Vérifiable au REQ</p>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-neutral-950">Notes</h2>
+          {/* Notes */}
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-[#F0F0F0]">Notes</h2>
             <form action={updateProspectNotes} className="mt-4 space-y-3">
-              <input type="hidden" name="prospectId" value={prospect.id} />
+              <input type="hidden" name="prospectId" value={p.id} />
               <textarea
                 name="notes"
-                defaultValue={prospect.notes ?? ""}
+                defaultValue={p.notes ?? ""}
                 rows={5}
-                placeholder="Commentaires commerciaux, objections, contexte du bien, historique des échanges…"
-                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-950 resize-none"
+                placeholder="Commentaires commerciaux, objections, contexte, historique des échanges…"
+                className="w-full resize-none rounded-lg border border-[#272727] bg-[#1C1C1C] px-3 py-2 text-sm text-[#F0F0F0] outline-none transition placeholder:text-[#555] focus:border-[#C9A84C]"
               />
               <button
                 type="submit"
-                className="rounded-lg bg-neutral-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+                className="rounded-lg bg-[#C9A84C] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#E5C97A]"
               >
-                Enregistrer les notes
+                Enregistrer
               </button>
             </form>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-neutral-950">Pipeline</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Fais évoluer le prospect dans le tunnel commercial.
-            </p>
-
+          {/* Pipeline */}
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-[#F0F0F0]">Pipeline</h2>
+            <p className="mt-2 text-sm text-[#777]">Fais évoluer le prospect dans le tunnel commercial.</p>
             <div className="mt-4">
               <ProspectStatusSelect
-                prospectId={prospect.id}
-                currentStatus={prospect.statut ?? "découvert"}
+                prospectId={p.id}
+                currentStatus={p.statut ?? "découvert"}
                 action={updateProspectStatus}
               />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-neutral-950">Timeline</h2>
+          {/* Timeline */}
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-[#F0F0F0]">Timeline</h2>
             <ol className="mt-4 space-y-4">
               {timeline.map((item) => (
                 <li key={item.label} className="flex gap-3">
-                  <div
-                    className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                      item.done ? "bg-emerald-500" : "bg-neutral-300"
-                    }`}
-                  />
+                  <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.done ? "bg-[#C9A84C]" : "bg-[#272727]"}`} />
                   <div>
-                    <p className="text-sm font-medium text-neutral-900">{item.label}</p>
-                    <p className="mt-1 text-sm text-neutral-500">{item.value}</p>
+                    <p className="text-sm font-medium text-[#F0F0F0]">{item.label}</p>
+                    <p className="mt-0.5 text-sm text-[#777]">{item.value}</p>
                   </div>
                 </li>
               ))}
             </ol>
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-neutral-950">Métadonnées</h2>
+          {/* Métadonnées */}
+          <div className="rounded-2xl border border-[#272727] bg-[#141414] p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-[#F0F0F0]">Métadonnées</h2>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">ID</dt>
-                <dd className="max-w-[60%] break-all text-right text-neutral-900">{prospect.id}</dd>
+                <dt className="text-[#777]">ID</dt>
+                <dd className="max-w-[60%] break-all text-right text-[#AAA]">{p.id}</dd>
               </div>
               <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Statut actuel</dt>
-                <dd className="text-right text-neutral-900">
-                  {prospect.statut ?? "découvert"}
-                </dd>
+                <dt className="text-[#777]">Statut actuel</dt>
+                <dd className="text-right text-[#F0F0F0]">{p.statut ?? "découvert"}</dd>
               </div>
             </dl>
           </div>

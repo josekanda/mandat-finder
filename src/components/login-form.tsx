@@ -1,82 +1,79 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
 
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const supabase = createClient();
-
     setStatus("loading");
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setStatus("error");
-      setMessage(error.message || "Impossible d’envoyer le lien de connexion.");
+      setMessage("Identifiants incorrects. Vérifiez votre email et mot de passe.");
       return;
     }
 
-    setStatus("success");
-    setMessage("Un lien de connexion a été envoyé à votre adresse email.");
+    router.push(next);
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <label className="block">
-        <span className="mb-2 block text-sm font-medium text-neutral-700">
+        <span className="mb-2 block text-sm font-medium text-[#CCC]">
           Adresse email
         </span>
         <input
           type="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="vous@agence.fr"
-          className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-neutral-950"
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="vous@agence.ca"
+          className="w-full rounded-xl border border-[#272727] bg-[#1C1C1C] px-4 py-3 text-sm text-[#F0F0F0] outline-none transition placeholder:text-[#555] focus:border-[#C9A84C]"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-2 block text-sm font-medium text-[#CCC]">
+          Mot de passe
+        </span>
+        <input
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          className="w-full rounded-xl border border-[#272727] bg-[#1C1C1C] px-4 py-3 text-sm text-[#F0F0F0] outline-none transition placeholder:text-[#555] focus:border-[#C9A84C]"
         />
       </label>
 
       <button
         type="submit"
         disabled={status === "loading"}
-        className="w-full rounded-xl bg-neutral-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl bg-[#C9A84C] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#E5C97A] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {status === "loading" ? "Envoi en cours..." : "Recevoir un lien de connexion"}
+        {status === "loading" ? "Connexion…" : "Se connecter"}
       </button>
 
-      {message ? (
-        <div
-          className={`rounded-xl px-4 py-3 text-sm ${
-            status === "error"
-              ? "bg-red-50 text-red-700"
-              : "bg-emerald-50 text-emerald-700"
-          }`}
-        >
+      {message && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {message}
         </div>
-      ) : null}
-
-      <p className="text-xs leading-5 text-neutral-500">
-        Ce flux utilise un lien magique envoyé par Supabase Auth. Après validation, l’utilisateur
-        revient dans l’application puis est redirigé vers la page demandée. [web:572][web:575]
-      </p>
+      )}
     </form>
   );
 }

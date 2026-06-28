@@ -1,91 +1,113 @@
-// src/app/(app)/layout.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/prospects", label: "Prospects" },
-  { href: "/zones", label: "Zones" },
+  { href: "/dashboard", label: "Dashboard",  icon: "▦" },
+  { href: "/prospects",  label: "Prospects",  icon: "◈" },
+  { href: "/zones",      label: "Zones",      icon: "◎" },
 ];
 
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+async function logout() {
+  "use server";
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  await supabase.auth.signOut();
+  revalidatePath("/");
+  redirect("/login");
+}
 
-  if (!user) {
-    redirect("/login");
-  }
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-950">
-      <div className="mx-auto flex min-h-screen max-w-7xl">
-        <aside className="hidden w-64 shrink-0 border-r border-neutral-200 bg-white lg:flex lg:flex-col">
-          <div className="border-b border-neutral-200 px-6 py-5">
-            <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
-              Mandat Finder
+    <div className="min-h-screen bg-[#0C0C0C] text-[#F0F0F0]">
+      <div className="mx-auto flex min-h-screen max-w-[1600px]">
+
+        {/* ── Sidebar ── */}
+        <aside className="hidden w-60 shrink-0 border-r border-[#272727] bg-[#0E0E0E] lg:flex lg:flex-col">
+
+          {/* Logo */}
+          <div className="border-b border-[#272727] px-5 py-5">
+            <Link href="/dashboard" className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-black"
+                style={{ background: "linear-gradient(135deg, #C9A84C, #A07830)" }}
+              >
+                IS
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#F0F0F0]">Immosignaux</p>
+                <p className="text-[11px] text-[#555]">Prospection ciblée</p>
+              </div>
             </Link>
-            <p className="mt-1 text-sm text-neutral-500">
-              Espace de courtage
-            </p>
           </div>
 
+          {/* Nav */}
           <nav className="flex-1 space-y-1 px-3 py-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="block rounded-lg px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 hover:text-neutral-950"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#777] transition hover:bg-[#1C1C1C] hover:text-[#C9A84C]"
               >
+                <span className="text-base leading-none">{item.icon}</span>
                 {item.label}
               </Link>
             ))}
           </nav>
 
-          <div className="border-t border-neutral-200 px-6 py-4 text-xs text-neutral-500">
-            Connecté en tant que
-            <div className="mt-1 truncate text-sm font-medium text-neutral-800">
-              {user.email}
-            </div>
+          {/* Profil + logout */}
+          <div className="border-t border-[#272727] px-4 py-4">
+            <p className="text-[11px] text-[#555]">Connecté</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-[#AAA]">{user.email}</p>
+            <form action={logout} className="mt-3">
+              <button
+                type="submit"
+                className="w-full rounded-lg border border-[#272727] px-3 py-1.5 text-xs font-medium text-[#777] transition hover:border-[#C9A84C] hover:text-[#C9A84C]"
+              >
+                Déconnexion
+              </button>
+            </form>
           </div>
         </aside>
 
+        {/* ── Contenu principal ── */}
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/90 backdrop-blur">
-            <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-              <div>
-                <p className="text-sm font-medium text-neutral-900">
-                  Espace de courtage
-                </p>
-                <p className="text-xs text-neutral-500">
-                  Prospection immobilière ciblée
-                </p>
-              </div>
 
-              <div className="flex items-center gap-3">
-                <span className="hidden text-sm text-neutral-500 sm:inline">
-                  {user.email}
-                </span>
-                <Link
-                  href="/"
-                  className="rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
+          {/* Header mobile */}
+          <header className="sticky top-0 z-20 border-b border-[#272727] bg-[#0C0C0C]/90 backdrop-blur lg:hidden">
+            <div className="flex h-14 items-center justify-between px-4">
+              <Link href="/dashboard" className="flex items-center gap-2">
+                <div
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-black"
+                  style={{ background: "linear-gradient(135deg, #C9A84C, #A07830)" }}
                 >
-                  Landing
-                </Link>
+                  IS
+                </div>
+                <span className="text-sm font-semibold text-[#F0F0F0]">Immosignaux</span>
+              </Link>
+              <div className="flex items-center gap-2">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-[#777] hover:text-[#C9A84C]"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               </div>
             </div>
           </header>
 
-          <main className="flex-1 px-4 py-6 sm:px-6">
+          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
         </div>
+
       </div>
     </div>
   );

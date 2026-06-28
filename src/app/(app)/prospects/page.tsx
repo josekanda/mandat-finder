@@ -36,26 +36,23 @@ export default async function ProspectsPage({ searchParams }: PageProps) {
     .order("score", { ascending: false })
     .limit(500);
 
-  // Filtre zones actives (FSA + région + municipalité)
   if (zoneFilters) query = query.or(zoneFilters.orFilter);
 
-  // Filtre période de construction
   if (periode === "pre1960")   query = query.lte("annee_construction", 1960);
   if (periode === "1960-1979") query = query.gte("annee_construction", 1961).lte("annee_construction", 1979);
   if (periode === "1980-1999") query = query.gte("annee_construction", 1980).lte("annee_construction", 1999);
   if (periode === "2000+")     query = query.gte("annee_construction", 2000);
 
-  // Filtre statut pipeline
   if (statut) query = query.eq("statut", statut);
 
   const { data, error } = await query;
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-        <h1 className="text-xl font-semibold text-red-900">Prospects</h1>
-        <p className="mt-2 text-sm text-red-700">Impossible de charger la liste des prospects.</p>
-        <p className="mt-1 text-xs text-red-600">{error.message}</p>
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
+        <h1 className="text-xl font-semibold text-red-400">Prospects</h1>
+        <p className="mt-2 text-sm text-red-400/80">Impossible de charger la liste des prospects.</p>
+        <p className="mt-1 text-xs text-red-400/60">{error.message}</p>
       </div>
     );
   }
@@ -70,28 +67,27 @@ export default async function ProspectsPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <section>
-        <p className="text-sm font-medium text-neutral-500">Pipeline commercial</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">
-          Prospects
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm text-neutral-600">
-          Explore la liste, trie les opportunités et visualise les adresses sur la carte pour repérer
-          rapidement les zones à fort potentiel.
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#C9A84C]">Pipeline commercial</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#F0F0F0]">Prospects</h1>
+        <p className="mt-2 max-w-3xl text-sm text-[#777]">
+          Explore la liste, trie les opportunités et visualise les adresses sur la carte.
         </p>
       </section>
 
       {activeFilter && (
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-neutral-900 px-3 py-1 text-sm font-medium text-white">
+          <span className="rounded-full border border-[#C9A84C]/40 bg-[#C9A84C]/10 px-3 py-1 text-sm font-medium text-[#C9A84C]">
             {activeFilter}
           </span>
           <Link
             href="/prospects"
-            className="text-sm text-neutral-500 hover:text-neutral-900 underline underline-offset-2"
+            className="text-sm text-[#777] underline underline-offset-2 hover:text-[#C9A84C]"
           >
             Effacer le filtre
           </Link>
-          <span className="text-sm text-neutral-400">{prospects.length} résultat{prospects.length > 1 ? "s" : ""}</span>
+          <span className="text-sm text-[#555]">
+            {prospects.length} résultat{prospects.length > 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
