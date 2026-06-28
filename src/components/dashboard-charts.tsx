@@ -113,7 +113,8 @@ export default function DashboardCharts({ prospects }: Props) {
                 dataKey="count"
                 radius={[4, 4, 0, 0]}
                 fill="#171717"
-                onClick={(data: { statut: string }) =>
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={(data: any) =>
                   router.push(`/prospects?statut=${encodeURIComponent(data.statut)}`)
                 }
               />
